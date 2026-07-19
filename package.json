@@ -1,0 +1,33 @@
+{
+  "name": "@dotlabshq/customers-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx watch --env-file=.env.local src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@baseworks/core": "^0.2.1",
+    "@baseworks/customers": "^0.1.0",
+    "@baseworks/foldbase": "^0.1.1",
+    "@baseworks/org": "^0.2.0",
+    "@baseworks/sdk": "^0.1.0"
+  },
+  "devDependencies": {
+    "@baseworks/auth": "^0.2.4",
+    "@types/node": "^22.20.0",
+    "@hono/node-server": "^1.19.14",
+    "@hono/zod-validator": "^0.4.3",
+    "hono": "^4.12.27",
+    "tsup": "^8.5.1",
+    "tsx": "^4.22.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9",
+    "zod": "^3.25.76"
+  }
+}

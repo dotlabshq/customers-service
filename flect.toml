@@ -1,0 +1,11 @@
+[app]
+name  = "customers-service"
+image = "ghcr.io/dotlabshq/customers-service:0.1.0"
+
+# customers-service backs onto its own private foldbase sibling (ADR 0001). Unlike
+# org-service, customer data is genuinely per-org, so the tenant is the org id
+# (set per request via withTenant); FOLDBASE_TENANT is not pinned. It calls
+# org-service (the PDP) to verify membership on every request.
+[env]
+# FOLDBASE_SERVICE_URL, FOLDBASE_TOKEN — injected at deploy.
+# ORG_SERVICE_URL — injected via service binding (membership checks).
