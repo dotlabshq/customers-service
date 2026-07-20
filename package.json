@@ -16,7 +16,7 @@
     "@baseworks/customers": "^0.1.0",
     "@baseworks/foldbase": "^0.1.1",
     "@baseworks/org": "^0.2.0",
-    "@baseworks/sdk": "^0.1.0"
+    "@baseworks/sdk": "^0.1.2"
   },
   "devDependencies": {
     "@baseworks/auth": "^0.2.4",

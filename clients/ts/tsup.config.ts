@@ -6,6 +6,7 @@ export default defineConfig({
     events: 'src/events.ts',
     projections: 'src/projections.ts',
     cli: 'src/cli.ts',
+    graphql: 'src/graphql.ts',
   },
   format: ['esm'],
   dts: true,

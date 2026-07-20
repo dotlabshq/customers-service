@@ -1,16 +1,22 @@
 {
   "name": "@baseworks/customers",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Customers capability: typed HTTP client, event catalog, projections, and CLI plugin for customers-service. Contract-first, versioned with the service.",
   "type": "module",
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": "./dist/client.js",
     "./events": "./dist/events.js",
     "./projections": "./dist/projections.js",
-    "./cli": "./dist/cli.js"
+    "./cli": "./dist/cli.js",
+    "./graphql": "./dist/graphql.js"
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
