@@ -45,6 +45,14 @@ export interface HttpClient {
  * the service validates. Every call carries the org id (X-Org-Id) — customers
  * are per-org, and the identity JWT is org-less by design (ADR-009).
  */
+/**
+ * Paths here are the service's own — `/customers`, not `/v1/customers`.
+ *
+ * A service mounts its routes at its root and a gateway publishes it at
+ * `/v1/<name>`, stripping that prefix before the request arrives (ADR-042 §4),
+ * so a service never encodes where it happens to be mounted and neither does
+ * its client. `baseUrl` is wherever the service answers.
+ */
 export class CustomersClient {
   private readonly baseUrl: string
   private readonly fetchImpl: typeof fetch
@@ -102,27 +110,27 @@ export class CustomersClient {
     if (opts.limit !== undefined) q.set('limit', String(opts.limit))
     if (opts.offset !== undefined) q.set('offset', String(opts.offset))
     const qs = q.toString()
-    const { customers } = await this.api<{ customers: Customer[] }>('GET', `/v1/customers${qs ? `?${qs}` : ''}`)
+    const { customers } = await this.api<{ customers: Customer[] }>('GET', `/customers${qs ? `?${qs}` : ''}`)
     return customers
   }
   async get(ref: string): Promise<Customer> {
-    const { customer } = await this.api<{ customer: Customer }>('GET', `/v1/customers/${ref}`)
+    const { customer } = await this.api<{ customer: Customer }>('GET', `/customers/${ref}`)
     return customer
   }
   async getByExternalId(externalId: string): Promise<Customer> {
-    const { customer } = await this.api<{ customer: Customer }>('GET', `/v1/customers?external_id=${encodeURIComponent(externalId)}`)
+    const { customer } = await this.api<{ customer: Customer }>('GET', `/customers?external_id=${encodeURIComponent(externalId)}`)
     return customer
   }
   async create(input: CreateCustomerInput): Promise<Customer> {
-    const { customer } = await this.api<{ customer: Customer }>('POST', '/v1/customers', input)
+    const { customer } = await this.api<{ customer: Customer }>('POST', '/customers', input)
     return customer
   }
   async update(ref: string, input: UpdateCustomerInput): Promise<Customer> {
-    const { customer } = await this.api<{ customer: Customer }>('PATCH', `/v1/customers/${ref}`, input)
+    const { customer } = await this.api<{ customer: Customer }>('PATCH', `/customers/${ref}`, input)
     return customer
   }
   async delete(ref: string): Promise<void> {
-    await this.api('DELETE', `/v1/customers/${ref}`)
+    await this.api('DELETE', `/customers/${ref}`)
   }
 }
 

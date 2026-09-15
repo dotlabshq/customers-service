@@ -46,7 +46,7 @@ export function buildCustomersCommand(deps: CustomersCliDeps): Command {
   const cli = deps.cliName ?? 'cli'
 
   const listCustomers = async (opts: { output: string }) => {
-    const res = await http.get<{ customers: CustomerRow[] }>('/v1/customers').catch(die)
+    const res = await http.get<{ customers: CustomerRow[] }>('/customers').catch(die)
     printOutput(res.customers, opts.output, (wide) => {
       table(res.customers, [
         { key: 'shortId', label: 'ID' },
@@ -99,7 +99,7 @@ export function buildCustomersCommand(deps: CustomersCliDeps): Command {
           ...(opts.currency ? { currency: opts.currency } : {}),
           ...(opts.meta ? { metadata: parseKvPairs(opts.meta) } : {}),
         }
-        const res = await http.post<{ customer: CustomerRow }>('/v1/customers', body).catch(die)
+        const res = await http.post<{ customer: CustomerRow }>('/customers', body).catch(die)
         success(`Customer created: ${res.customer.name}`)
         kv([['id', res.customer.shortId], ['name', res.customer.name]])
       }),
@@ -110,7 +110,7 @@ export function buildCustomersCommand(deps: CustomersCliDeps): Command {
       .description('Show customer details')
       .option(...outputOption())
       .action(async (ref: string, opts: { output: string }) => {
-        const res = await http.get<{ customer: Record<string, unknown> }>(`/v1/customers/${ref}`).catch(die)
+        const res = await http.get<{ customer: Record<string, unknown> }>(`/customers/${ref}`).catch(die)
         const cst = res.customer as Record<string, unknown>
         printOutput(cst, opts.output, () => {
           kv([
@@ -152,7 +152,7 @@ export function buildCustomersCommand(deps: CustomersCliDeps): Command {
         if (opts.currency !== undefined) body['currency'] = opts.currency
         if (opts.meta !== undefined) body['metadata'] = parseKvPairs(opts.meta)
         if (!Object.keys(body).length) { warn('Provide at least one field to update.'); return }
-        const res = await http.patch<{ customer: CustomerRow }>(`/v1/customers/${ref}`, body).catch(die)
+        const res = await http.patch<{ customer: CustomerRow }>(`/customers/${ref}`, body).catch(die)
         success('Customer updated.')
         kv([['id', res.customer.shortId], ['name', res.customer.name]])
       }),
@@ -162,7 +162,7 @@ export function buildCustomersCommand(deps: CustomersCliDeps): Command {
     new Command('delete').alias('rm').argument('<ref>')
       .description('Delete a customer')
       .action(async (ref: string) => {
-        await http.del(`/v1/customers/${ref}`).catch(die)
+        await http.del(`/customers/${ref}`).catch(die)
         success(`Customer deleted: ${ref}`)
       }),
   )

@@ -1,0 +1,210 @@
+openapi: 3.1.0
+info:
+  title: customers-service
+  version: "1.0"
+  description: |
+    The customer directory: who an organization bills, invoices and collects
+    from. One record per customer, scoped to an organization.
+
+    **Every request names an org.** `X-Org-Id` carries it, and this service asks
+    org-service whether the caller is a member before touching anything. The org
+    id is also the storage tenant, so two organizations' customers are separated
+    by the store rather than by a column somebody must remember to filter on.
+
+    Routes live at the service root; a gateway publishes them at
+    `/v1/customers/...` and strips that prefix (ADR-042 §4). `/v1` is also
+    mounted here for callers that predate the gateway.
+
+servers:
+  - url: https://example.com/v1/customers
+    description: Behind a gateway
+  - url: http://127.0.0.1:3008
+    description: Direct, for local development
+
+tags:
+  - name: discovery
+  - name: customers
+
+security:
+  - bearer: []
+
+paths:
+  /healthz:
+    get:
+      tags: [discovery]
+      summary: Liveness
+      security: []
+      responses:
+        "200": { description: ok }
+
+  /.well-known/service:
+    get:
+      tags: [discovery]
+      summary: What this service is
+      security: []
+      responses:
+        "200":
+          description: The manifest
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceManifest" }
+
+  /customers:
+    get:
+      tags: [customers]
+      summary: List customers, or resolve one by external id
+      description: |
+        `?external_id=` looks up the single customer carrying that id in the
+        caller's own system, and answers 404 when there is none. Without it,
+        a page of the directory.
+      parameters:
+        - { name: external_id, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 500 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        "200":
+          description: Customers, or a single customer when external_id was given
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  customers:
+                    type: array
+                    items: { $ref: "#/components/schemas/Customer" }
+                  customer: { $ref: "#/components/schemas/Customer" }
+        "400": { description: org_required — no X-Org-Id }
+        "403": { description: Not a member of this org }
+        "404": { description: No customer with that external id }
+    post:
+      tags: [customers]
+      summary: Create a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  customer: { $ref: "#/components/schemas/Customer" }
+        "409": { description: external_id already belongs to another customer }
+        "422": { description: Malformed body }
+
+  /customers/{ref}:
+    parameters:
+      - name: ref
+        in: path
+        required: true
+        schema: { type: string }
+        description: The id or the short id.
+    get:
+      tags: [customers]
+      summary: One customer
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  customer: { $ref: "#/components/schemas/Customer" }
+        "404": { description: No such customer in this org }
+    patch:
+      tags: [customers]
+      summary: Change a customer
+      description: At least one field. Absent fields are left alone.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerInput" }
+      responses:
+        "200":
+          description: Changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  customer: { $ref: "#/components/schemas/Customer" }
+        "404": { description: No such customer in this org }
+    delete:
+      tags: [customers]
+      summary: Archive a customer
+      description: |
+        The record stops appearing in the directory. The events stay — an
+        invoice that referenced this customer must still be explicable.
+      responses:
+        "204": { description: Archived }
+        "404": { description: No such customer in this org }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Address:
+      type: object
+      properties:
+        line1: { type: string }
+        line2: { type: string }
+        city: { type: string }
+        state: { type: string }
+        postalCode: { type: string }
+        country: { type: string }
+
+    CustomerInput:
+      type: object
+      properties:
+        name: { type: string }
+        externalId:
+          type: string
+          description: This customer's id in the caller's own system. Unique per org.
+        email: { type: string, format: email }
+        phone: { type: string }
+        taxId: { type: string }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        address: { $ref: "#/components/schemas/Address" }
+        metadata: { type: object, additionalProperties: true }
+
+    Customer:
+      type: object
+      required: [id, shortId, name]
+      properties:
+        id: { type: string }
+        shortId: { type: string }
+        externalId: { type: [string, "null"] }
+        name: { type: string }
+        email: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        taxId: { type: [string, "null"] }
+        currency: { type: [string, "null"] }
+        address:
+          oneOf:
+            - { $ref: "#/components/schemas/Address" }
+            - { type: "null" }
+        metadata: { type: object, additionalProperties: true }
+        createdAt: { type: integer }
+        updatedAt: { type: integer }
+
+    ServiceManifest:
+      type: object
+      required: [name, version, api_version]
+      properties:
+        name: { type: string }
+        version: { type: string }
+        api_version: { type: string }
+        openapi_url: { type: string }
+        capabilities:
+          type: array
+          items: { type: string }

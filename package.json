@@ -1,6 +1,6 @@
 {
   "name": "@dotlabshq/customers-service",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -12,22 +12,27 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@baseworks/core": "^0.2.1",
-    "@baseworks/customers": "^0.1.0",
-    "@baseworks/foldbase": "^0.1.1",
-    "@baseworks/org": "^0.2.0",
-    "@baseworks/sdk": "^0.1.2"
+    "@baseworks/core": "workspace:*",
+    "@baseworks/customers": "workspace:*",
+    "@baseworks/foldbase": "workspace:*",
+    "@baseworks/org": "workspace:*",
+    "@baseworks/sdk": "workspace:*"
   },
   "devDependencies": {
-    "@baseworks/auth": "^0.2.4",
-    "@types/node": "^22.20.0",
+    "@baseworks/auth": "workspace:*",
+    "@baseworks/tsconfig": "workspace:*",
     "@hono/node-server": "^1.19.14",
     "@hono/zod-validator": "^0.4.3",
+    "@types/node": "^22.20.0",
     "hono": "^4.12.27",
     "tsup": "^8.5.1",
     "tsx": "^4.22.5",
     "typescript": "^5.9.3",
     "vitest": "^4.1.9",
     "zod": "^3.25.76"
-  }
+  },
+  "files": [
+    "dist",
+    "openapi.yaml"
+  ]
 }
