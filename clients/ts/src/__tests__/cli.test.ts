@@ -24,7 +24,7 @@ const CUST2 = { ...CUST, id: '019f6a3e-2222-7c71-beff-496d1be3fd1f', shortId: 'c
 
 describe('dtab customers (list)', () => {
   it('default columns: ID → NAME → EMAIL, no full UUID', async () => {
-    mocks.mockGet('/v1/customers', { customers: [CUST, CUST2] })
+    mocks.mockGet('/customers', { customers: [CUST, CUST2] })
     const r = await run(['customers'])
     expect(r.exitCode).toBe(0)
     expect(r.stdout).toContain('cst9x2')
@@ -35,21 +35,21 @@ describe('dtab customers (list)', () => {
   })
 
   it('customer (singular alias) lists', async () => {
-    mocks.mockGet('/v1/customers', { customers: [CUST] })
+    mocks.mockGet('/customers', { customers: [CUST] })
     const r = await run(['customer'])
     expect(r.exitCode).toBe(0)
     expect(r.stdout).toContain('cst9x2')
   })
 
   it('customers ls lists', async () => {
-    mocks.mockGet('/v1/customers', { customers: [CUST] })
+    mocks.mockGet('/customers', { customers: [CUST] })
     const r = await run(['customers', 'ls'])
     expect(r.exitCode).toBe(0)
     expect(r.stdout).toContain('cst9x2')
   })
 
   it('-o wide adds EXTERNAL, CUR, CREATED, FULL ID', async () => {
-    mocks.mockGet('/v1/customers', { customers: [CUST] })
+    mocks.mockGet('/customers', { customers: [CUST] })
     const r = await run(['customers', '-o', 'wide'])
     expect(r.stdout).toContain('EXTERNAL')
     expect(r.stdout).toContain('acct-42')
@@ -58,14 +58,14 @@ describe('dtab customers (list)', () => {
   })
 
   it('customers ls -o wide also shows FULL ID', async () => {
-    mocks.mockGet('/v1/customers', { customers: [CUST] })
+    mocks.mockGet('/customers', { customers: [CUST] })
     const r = await run(['customers', 'ls', '-o', 'wide'])
     expect(r.stdout).toContain('FULL ID')
     expect(r.stdout).toContain(CUST.id)
   })
 
   it('-o json returns raw array', async () => {
-    mocks.mockGet('/v1/customers', { customers: [CUST] })
+    mocks.mockGet('/customers', { customers: [CUST] })
     const r = await run(['customers', '-o', 'json'])
     const parsed = JSON.parse(r.stdout)
     expect(Array.isArray(parsed)).toBe(true)
@@ -75,7 +75,7 @@ describe('dtab customers (list)', () => {
 
 describe('dtab customers create', () => {
   it('sends name + optional fields + metadata', async () => {
-    const captured = mocks.mockPostCapture('/v1/customers', { customer: CUST })
+    const captured = mocks.mockPostCapture('/customers', { customer: CUST })
     const r = await run(['customers', 'create', '--name', 'Acme Co', '--email', 'billing@acme.test', '--external-id', 'acct-42', '--currency', 'USD', '--meta', 'tier=gold'])
     expect(r.exitCode).toBe(0)
     const body = captured.body as Record<string, unknown>
@@ -91,7 +91,7 @@ describe('dtab customers create', () => {
 
 describe('dtab customers get', () => {
   it('shows details incl. shortId, hides full UUID from id line', async () => {
-    mocks.mockGet('/v1/customers/acct-42', { customer: CUST })
+    mocks.mockGet('/customers/acct-42', { customer: CUST })
     const r = await run(['customers', 'get', 'acct-42'])
     expect(r.exitCode).toBe(0)
     const idLine = r.stdout.split('\n').find((l) => /^\s+id\s/.test(l))
@@ -103,14 +103,14 @@ describe('dtab customers get', () => {
 
 describe('dtab customers update / delete', () => {
   it('update sends only changed fields', async () => {
-    const captured = mocks.mockPatchCapture('/v1/customers/cst9x2', { customer: { ...CUST, name: 'Acme HQ' } })
+    const captured = mocks.mockPatchCapture('/customers/cst9x2', { customer: { ...CUST, name: 'Acme HQ' } })
     const r = await run(['customers', 'update', 'cst9x2', '--name', 'Acme HQ'])
     expect(r.exitCode).toBe(0)
     expect((captured.body as Record<string, unknown>).name).toBe('Acme HQ')
   })
 
   it('delete works (and rm alias)', async () => {
-    mocks.mockDelete('/v1/customers/cst9x2')
+    mocks.mockDelete('/customers/cst9x2')
     const r = await run(['customers', 'delete', 'cst9x2'])
     expect(r.exitCode).toBe(0)
     expect(r.stdout).toContain('cst9x2')
