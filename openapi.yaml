@@ -94,7 +94,7 @@ paths:
                 properties:
                   customer: { $ref: "#/components/schemas/Customer" }
         "409": { description: external_id already belongs to another customer }
-        "422": { description: Malformed body }
+        "400": { description: Malformed body }
 
   /customers/{ref}:
     parameters:
