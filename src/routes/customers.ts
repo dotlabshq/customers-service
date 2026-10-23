@@ -83,7 +83,7 @@ export function customersRouter(store: Store, orgBaseUrl: string) {
     try {
       const { role, via } = await org.effectiveRole(orgRef)
       if (role === 'none') return c.json({ error: 'forbidden', message: 'Not a member of this org' }, 403)
-      c.set('orgId' as never, (via?.scopeId ?? orgRef) as never)
+      c.set('orgId' as never, (via?.scope_id ?? orgRef) as never)
     } catch (e) {
       if (e instanceof OrgError && e.status === 404) {
         return c.json({ error: 'org_not_found', message: 'Active org does not exist — run `use <org>` with a valid org' }, 404)
