@@ -71,7 +71,7 @@ export function fakeOrgService(roles: Record<string, string>, aliases: Record<st
     const role = roles[scope] ?? 'none'
     const body = role === 'none'
       ? { role: 'none' }
-      : { role, via: { scopeId: scope, scopeKind: 'org' } }
+      : { role, via: { scope_id: scope, scope_kind: 'org' } }
     return new Response(JSON.stringify(body), {
       status: 200,
       headers: { 'content-type': 'application/json' },
