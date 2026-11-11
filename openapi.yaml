@@ -18,7 +18,7 @@ info:
 servers:
   - url: https://example.com/v1/customers
     description: Behind a gateway
-  - url: http://127.0.0.1:3008
+  - url: http://127.0.0.1:3008/api
     description: Direct, for local development
 
 tags:
@@ -74,7 +74,7 @@ paths:
                     items: { $ref: "#/components/schemas/Customer" }
                   customer: { $ref: "#/components/schemas/Customer" }
         "400": { description: org_required — no X-Org-Id }
-        "403": { description: Not a member of this org }
+        "403": { description: Not a member of this org, or the permission the route asks for is missing (`permission` names it) }
         "404": { description: No customer with that external id }
     post:
       tags: [customers]

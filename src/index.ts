@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 import { createEnv } from '@baseworks/sdk'
 import { createApp, registerDefinitions } from './app.js'
+import { orgAccess, registerWithOrg } from './lib/org.js'
 
 const env = createEnv()
 
@@ -12,7 +13,8 @@ const env = createEnv()
 const fb = env.service('foldbase')
 await registerDefinitions(fb)
 
-// org-service — the PDP. Every customer op verifies membership there.
+// org-service decides. Every request verifies membership there and asks what
+// the caller may do. Its own address, not a gateway's: registration is internal.
 const orgBaseUrl =
   process.env['ORG_SERVICE_URL'] ??
   process.env['ORG_URL'] ??
@@ -21,7 +23,12 @@ if (!orgBaseUrl) throw new Error('ORG_SERVICE_URL not configured (needed for org
 
 const root = new Hono()
 root.use('*', logger())
-root.route('/', createApp(fb, orgBaseUrl))
+// What a person may do here is org-service's to say. This service tells it
+// what its actions ask for, in the background: it does not wait and does not
+// fail without it, and until it succeeds people are refused.
+const org = orgAccess(orgBaseUrl)
+root.route('/', createApp(fb, orgBaseUrl, { org }))
+void registerWithOrg(org)
 
 const port = Number(env.var('PORT') ?? 3000)
 serve({ fetch: root.fetch, port }, () => {

@@ -3,6 +3,7 @@ import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { requireOrg } from '@baseworks/org/hono'
 import { requireAuth } from '../lib/auth.js'
+import { permit, type OrgAccess } from '../lib/org.js'
 import { StoreError, type Store } from '../store.js'
 
 const AddressSchema = z.object({
@@ -42,19 +43,20 @@ function fail(err: unknown): never {
 }
 
 /**
- * customers-service routes, at the service ROOT.
- *
- * A gateway publishes the realm at `/v1/customers/...` and strips that prefix
- * (ADR-042 §4), so the service never encodes where it happens to be mounted.
- * app.ts also mounts these under `/v1` for callers that predate the gateway.
+ * customers-service routes. They are the API: app.ts mounts them under `/api`,
+ * and a gateway publishes that at `/v1/customers` by replacing the prefix
+ * (workspace ADR 0003), so the service never encodes where it is published.
  *
  * Every request is:
  *   1. authenticated (identity JWT → userId), then
  *   2. bound to an org via `X-Org-Id`, whose membership is verified against
- *      org-service (the PDP) by forwarding the caller's token — so a user can
- *      only touch orgs they belong to. The org id is the foldbase tenant.
+ *      org-service by forwarding the caller's token. The org id is the
+ *      foldbase tenant. Then
+ *   3. allowed or refused by permission: org-service says which of this
+ *      service's actions the person may do there, and the route names the one
+ *      it needs. No role is named here.
  */
-export function customersRouter(store: Store, orgBaseUrl: string) {
+export function customersRouter(store: Store, orgBaseUrl: string, org: OrgAccess) {
   const app = new Hono()
   app.use('*', requireAuth)
 
@@ -67,7 +69,7 @@ export function customersRouter(store: Store, orgBaseUrl: string) {
   const orgOf = (c: { get: (k: string) => unknown }) => c.get('orgId') as string
   const actorOf = (c: { get: (k: string) => unknown }) => (c.get('auth') as { userId: string }).userId
 
-  app.get('/customers', async (c) => {
+  app.get('/customers', permit(org, 'customer.read'), async (c) => {
     const orgId = orgOf(c)
     const externalId = c.req.query('external_id')
     if (externalId) {
@@ -80,23 +82,23 @@ export function customersRouter(store: Store, orgBaseUrl: string) {
     return c.json({ customers: await store.listCustomers(orgId, { limit, offset }) })
   })
 
-  app.get('/customers/:ref', async (c) => {
+  app.get('/customers/:ref', permit(org, 'customer.read'), async (c) => {
     const customer = await store.getCustomer(orgOf(c), c.req.param('ref'))
     if (!customer) return c.json({ error: 'not_found', message: 'Customer not found' }, 404)
     return c.json({ customer })
   })
 
-  app.post('/customers', zValidator('json', CreateSchema), async (c) => {
+  app.post('/customers', permit(org, 'customer.write'), zValidator('json', CreateSchema), async (c) => {
     const customer = await store.createCustomer(orgOf(c), c.req.valid('json'), actorOf(c)).catch(fail)
     return c.json({ customer }, 201)
   })
 
-  app.patch('/customers/:ref', zValidator('json', UpdateSchema), async (c) => {
+  app.patch('/customers/:ref', permit(org, 'customer.write'), zValidator('json', UpdateSchema), async (c) => {
     const customer = await store.updateCustomer(orgOf(c), c.req.param('ref'), c.req.valid('json'), actorOf(c)).catch(fail)
     return c.json({ customer })
   })
 
-  app.delete('/customers/:ref', async (c) => {
+  app.delete('/customers/:ref', permit(org, 'customer.archive'), async (c) => {
     await store.archiveCustomer(orgOf(c), c.req.param('ref'), actorOf(c)).catch(fail)
     return c.body(null, 204)
   })

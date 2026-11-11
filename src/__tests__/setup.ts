@@ -51,6 +51,23 @@ export function makeServiceToken(name = 'svc'): string {
   return signHs256Jwt({ sub: name, type: 'service' }, JWT_SECRET, 3600)
 }
 
+/** What a role is allowed by this service's manifest, the way org-service would answer. */
+const BY_ROLE: Record<string, string[]> = {
+  viewer: ['customer.read'],
+  member: ['customer.read', 'customer.write', 'customer.archive'],
+  admin: ['customer.read', 'customer.write', 'customer.archive'],
+  owner: ['customer.read', 'customer.write', 'customer.archive'],
+}
+
+export interface FakeOrgOptions {
+  /** A slug or short id that names an org: the real service resolves these. */
+  aliases?: Record<string, string>
+  /** false: the app's manifest is not registered, so nobody is allowed anything. */
+  registered?: boolean
+  /** true: `/authz/permissions` fails, as when org-service is down mid-request. */
+  permissionsDown?: boolean
+}
+
 /**
  * Stand in for org-service, the PDP.
  *
@@ -59,25 +76,32 @@ export function makeServiceToken(name = 'svc'): string {
  * org id to what the PDP says; anything absent answers `none`, which is how a
  * non-member looks.
  */
-export function fakeOrgService(roles: Record<string, string>, aliases: Record<string, string> = {}) {
+export function fakeOrgService(roles: Record<string, string>, o: FakeOrgOptions = {}) {
+  const aliases = o.aliases ?? {}
   const realFetch = globalThis.fetch
+  const answer = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+  const calls = { permissions: 0 }
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
+    if (url.includes('/authz/permissions')) {
+      calls.permissions++
+      if (o.permissionsDown) return answer({ error: 'internal' }, 500)
+      const asked = JSON.parse(String(init?.body ?? '{}')) as { app: string; scope_id: string }
+      const role = roles[asked.scope_id] ?? 'none'
+      const permissions = o.registered === false ? [] : BY_ROLE[role] ?? []
+      return answer({ app: asked.app, scope_id: asked.scope_id, role, permissions })
+    }
     if (!url.includes('/authz/role')) return realFetch(input as never, init)
     const named = new URL(url).searchParams.get('scope') ?? ''
-    // The real PDP resolves an id, a slug or a short id and answers with the
-    // scope it landed on. `aliases` is how a test says "this slug is that org".
+    // The real service resolves an id, a slug or a short id and answers with
+    // the scope it landed on. `aliases` is how a test says "this slug is that org".
     const scope = aliases[named] ?? named
     const role = roles[scope] ?? 'none'
-    const body = role === 'none'
-      ? { role: 'none' }
-      : { role, via: { scope_id: scope, scope_kind: 'org' } }
-    return new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    })
+    return answer(role === 'none' ? { role: 'none' } : { role, via: { scope_id: scope, scope_kind: 'org' } })
   }) as typeof fetch
-  return () => { globalThis.fetch = realFetch }
+  const restore = () => { globalThis.fetch = realFetch }
+  return Object.assign(restore, { calls })
 }
 
 /**
@@ -87,6 +111,8 @@ export function fakeOrgService(roles: Record<string, string>, aliases: Record<st
 export async function makeTestApp(fb: TestFoldBase, orgId: string) {
   const client = new FoldBase({ baseUrl: fb.base, token: fb.svcToken, tenant: 'unused' })
   await registerDefinitions(client)
+  // No answer is remembered between requests: each test sets its own org-service.
+  process.env['CUSTOMERS_PERMISSION_CACHE_SECONDS'] = '0'
   const app = createApp(client, 'http://org.test')
 
   function req(method: string, path: string, body?: unknown, o: { token?: string; org?: string | null } = {}) {

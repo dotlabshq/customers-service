@@ -9,3 +9,8 @@ image = "ghcr.io/dotlabshq/customers-service:0.1.0"
 [env]
 # FOLDBASE_SERVICE_URL, FOLDBASE_TOKEN — injected at deploy.
 # ORG_SERVICE_URL — injected via service binding (membership checks).
+
+# The API is under /api and /healthz at the root (workspace ADR 0003). Where
+# this is deployed, the service entry exposes it with the prefix replaced:
+#   expose = [{ path = "/v1/customers", to = "/api" }]
+# and calls org-service at its own address, not a gateway's.

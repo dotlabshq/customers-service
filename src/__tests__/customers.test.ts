@@ -164,7 +164,7 @@ describe('mount paths', () => {
 describe('the org is resolved before it is stored against', () => {
   it('a customer added under a slug is found under the id, and the other way round', async () => {
     restoreOrg()
-    restoreOrg = fakeOrgService({ [orgId]: 'owner' }, { acme: orgId })
+    restoreOrg = fakeOrgService({ [orgId]: 'owner' }, { aliases: { acme: orgId } })
 
     await create({ name: 'Added by the CLI' }, { org: 'acme' })
     const byId = await json<{ customers: Customer[] }>(await app.get('/customers', { org: orgId }))
