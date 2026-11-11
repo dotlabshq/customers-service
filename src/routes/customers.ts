@@ -12,7 +12,7 @@ const AddressSchema = z.object({
   line2: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
-  postalCode: z.string().optional(),
+  postal_code: z.string().optional(),
   country: z.string().optional(),
 })
 
@@ -27,10 +27,10 @@ const CreateSchema = z.object({
   kind: Kind.optional(),
   roles: Roles.optional(),
   website: Website.optional(),
-  externalId: z.string().min(1).optional(),
+  external_id: z.string().min(1).optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
-  taxId: z.string().optional(),
+  tax_id: z.string().optional(),
   currency: z.string().length(3).optional(),
   address: AddressSchema.optional(),
   metadata: z.record(z.unknown()).optional(),
@@ -43,14 +43,35 @@ const UpdateSchema = z.object({
   website: Website.optional(),
   lock: Fields.optional(),
   unlock: Fields.optional(),
-  externalId: z.string().min(1).optional(),
+  external_id: z.string().min(1).optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
-  taxId: z.string().optional(),
+  tax_id: z.string().optional(),
   currency: z.string().length(3).optional(),
   address: AddressSchema.optional(),
   metadata: z.record(z.unknown()).optional(),
 }).refine((d) => Object.keys(d).length > 0, { message: 'Provide at least one field' })
+
+/**
+ * The wire is snake_case (ADR-043). Until 0.6.0 this service spoke camelCase,
+ * and callers that still do are read the way they meant: the old names of the
+ * four fields that changed are renamed on the way in. Answers are snake_case
+ * only. To be removed once no caller sends them.
+ */
+const OLD_NAMES: Record<string, string> = { externalId: 'external_id', taxId: 'tax_id', postalCode: 'postal_code' }
+function renamed(body: unknown): unknown {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return body
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(body as Record<string, unknown>)) {
+    const key = OLD_NAMES[k] ?? k
+    if (key in out && key !== k) continue // the new name wins when both are sent
+    out[key] = key === 'address' ? renamed(v)
+      : (key === 'lock' || key === 'unlock') && Array.isArray(v) ? v.map((f) => (f === 'taxId' ? 'tax_id' : f))
+      : v
+  }
+  return out
+}
+const body = <T extends z.ZodTypeAny>(schema: T) => zValidator('json', z.preprocess(renamed, schema) as unknown as T)
 
 function fail(err: unknown): never {
   if (err instanceof StoreError) throw err
@@ -113,7 +134,7 @@ export function customersRouter(store: Store, orgBaseUrl: string, org: OrgAccess
       ...(q ? { q } : {}),
       ...(kind.success ? { kind: kind.data } : {}),
       ...(role.success ? { role: role.data } : {}),
-      ...(taxId ? { taxId } : {}),
+      ...(taxId ? { tax_id: taxId } : {}),
     }).catch(fail)
     return c.json(page)
   })
@@ -138,20 +159,20 @@ export function customersRouter(store: Store, orgBaseUrl: string, org: OrgAccess
     return c.json({ customer })
   })
 
-  app.post('/customers', permit(org, 'customer.write'), zValidator('json', CreateSchema), async (c) => {
+  app.post('/customers', permit(org, 'customer.write'), body(CreateSchema), async (c) => {
     const customer = await store.createCustomer(orgOf(c), c.req.valid('json'), actorOf(c)).catch(fail)
     return c.json({ customer }, 201)
   })
 
-  app.patch('/customers/:ref', permit(org, 'customer.write'), zValidator('json', UpdateSchema), async (c) => {
+  app.patch('/customers/:ref', permit(org, 'customer.write'), body(UpdateSchema), async (c) => {
     const patch = c.req.valid('json')
     // A lock is a person saying "leave this as I set it". A service cannot say
     // that, and cannot take it back.
     if ((patch.lock?.length || patch.unlock?.length) && c.get('orgRole') === 'service') {
       return c.json({ error: 'person_only', message: 'Only a person locks or unlocks a field' }, 403)
     }
-    const { customer, skippedFields } = await store.updateCustomer(orgOf(c), c.req.param('ref'), patch, actorOf(c)).catch(fail)
-    return c.json({ customer, skippedFields })
+    const { customer, skipped_fields } = await store.updateCustomer(orgOf(c), c.req.param('ref'), patch, actorOf(c)).catch(fail)
+    return c.json({ customer, skipped_fields })
   })
 
   app.delete('/customers/:ref', permit(org, 'customer.archive'), async (c) => {

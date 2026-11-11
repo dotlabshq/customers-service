@@ -41,7 +41,7 @@ All routes require `Authorization: Bearer <identity-jwt>` + `X-Org-Id: <org>`.
 
 - `?kind=company|person`, `?role=<role>`, `?tax_id=` — filters, combinable.
 - `?q=` — text in name, email, website, tax id or external id.
-- `?limit=` (50, at most 500) and `?cursor=` — the answer carries `nextCursor`
+- `?limit=` (50, at most 500) and `?cursor=` — the answer carries `next_cursor`
   (null on the last page); pass it back to continue. A walk by cursor neither
   skips nor repeats a record when others are added meanwhile. `?offset=` still
   works and is ignored when a cursor is given.
@@ -60,6 +60,10 @@ everything. `?entity=link` reads the links' feed instead (`LinkCreated`,
 
 ## The record
 
+The wire is snake_case, as everywhere in the realm (ADR-043). Before 0.6.0
+this service spoke camelCase; a request that still names `externalId`, `taxId`
+or `postalCode` is read as it meant, for now. Answers are snake_case only.
+
 The directory is generic: the same record serves billing, accounting and a
 CRM, so it says who a party is and nothing about what a product does with it.
 
@@ -68,25 +72,25 @@ CRM, so it says who a party is and nothing about what a product does with it.
 | `name` | required |
 | `kind` | `company` (default) or `person` |
 | `roles` | a set of `customer`, `supplier`, `employee`, `partner`; default `[customer]`. Replaced whole on update |
-| `email`, `phone`, `website`, `taxId`, `currency`, `address` | optional |
-| `externalId` | the id in the user's own third-party system. One per record, unique in the org. Anything more goes in `metadata` |
+| `email`, `phone`, `website`, `tax_id`, `currency`, `address` | optional |
+| `external_id` | the id in the user's own third-party system. One per record, unique in the org. Anything more goes in `metadata` |
 | `metadata` | free JSON, merged on update; the product's own |
-| `lockedFields` | read only; see below |
+| `locked_fields` | read only; see below |
 
 A consumer stores only the record's `id` and reads the profile here; it does
 not write its own ids into the record.
 
 **Locked fields.** A person can lock `name`, `email`, `phone`, `website`,
-`taxId`, `currency` or `address`: `PATCH { "lock": ["name"] }`. A later write
+`tax_id`, `currency` or `address`: `PATCH { "lock": ["name"] }`. A later write
 that names a locked field leaves it as it is, applies the rest, and answers
-with `skippedFields`. `unlock` is applied before the write and `lock` after it,
+with `skipped_fields`. `unlock` is applied before the write and `lock` after it,
 so "unlock and change" and "set and lock" are each one request. Only a person
 locks or unlocks; a service token is answered `403 person_only`.
 
 **Archive and restore.** Archiving removes the record from every read; its
 events stay. `POST /customers/:id/restore` writes it back whole, under the
 same id and short id, with its locks. By id only, and refused (`409`) while
-another record holds its `externalId`.
+another record holds its `external_id`.
 
 **Links.** A link joins one person and one company, with an optional `title`
 (what the person is there). Each pair once; a person can be at several

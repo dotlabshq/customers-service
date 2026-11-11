@@ -25,13 +25,13 @@ const customers = createCustomersClient({
 const acme = await customers.create({
   name: 'Acme Co',
   email: 'billing@acme.test',
-  externalId: 'acct-42',      // your own id for this customer
+  external_id: 'acct-42',      // your own id for this customer
   currency: 'USD',
   metadata: { tier: 'gold' },
 })
 
 await customers.list()                 // Customer[]
-await customers.get(acme.id)           // by id, shortId, or externalId
+await customers.get(acme.id)           // by id, short_id, or external_id
 await customers.getByExternalId('acct-42')
 await customers.update(acme.id, { phone: '+15551234' })
 await customers.delete(acme.id)
@@ -76,13 +76,13 @@ The projection is named `customers` → foldbase table `read_customers`. Tenant 
 ## 0.3.0
 
 For customers-service 0.4.0. A record has a `kind` (`company` or `person`),
-a set of `roles`, a `website` and `lockedFields`; `list()` filters by `kind`,
-`role` and `taxId`.
+a set of `roles`, a `website` and `locked_fields`; `list()` filters by `kind`,
+`role` and `tax_id`.
 
 ```ts
 await customers.update(id, { name: 'Acme GmbH', lock: ['name'] })   // set and lock
-const { customer, skippedFields } = await customers.updateWithResult(id, { name: 'ACME', email: 'a@acme.test' })
-// skippedFields: ['name'], the email is applied
+const { customer, skipped_fields } = await customers.updateWithResult(id, { name: 'ACME', email: 'a@acme.test' })
+// skipped_fields: ['name'], the email is applied
 
 await customers.delete(id)          // archive
 await customers.restore(id)         // and back, whole
@@ -92,7 +92,7 @@ await customers.links(personId)     // either side lists it
 await customers.unlink(companyId, link.id)
 ```
 
-`externalId` is the id in the user's own third-party system: one per record.
+`external_id` is the id in the user's own third-party system: one per record.
 The event catalog gains `CustomerRestored` and the `customer_link` aggregate
 (`LinkEvents`); the read model gains the `customer_links` projection.
 
@@ -101,7 +101,7 @@ The event catalog gains `CustomerRestored` and the `customer_link` aggregate
 For customers-service 0.5.0.
 
 ```ts
-const { customers: firstPage, nextCursor } = await customers.page({ q: 'acme', kind: 'company', limit: 50 })
+const { customers: firstPage, next_cursor } = await customers.page({ q: 'acme', kind: 'company', limit: 50 })
 for await (const c of customers.all({ role: 'supplier' })) { /* every supplier, page by page */ }
 
 const some = await customers.getMany([idA, idB])          // one request, at most 100
@@ -114,3 +114,16 @@ cursor = feed.cursor                                       // an archived record
 ```
 
 `list()` still answers a plain array.
+
+## 0.5.0 — the wire is snake_case
+
+For customers-service 0.6.0, which speaks snake_case like the rest of the realm
+(ADR-043). **Breaking for code that reads fields**: `shortId` → `short_id`,
+`externalId` → `external_id`, `taxId` → `tax_id`, `createdAt` → `created_at`,
+`updatedAt` → `updated_at`, `lockedFields` → `locked_fields`, `skippedFields` →
+`skipped_fields`, `nextCursor` → `next_cursor`, `address.postalCode` →
+`address.postal_code`; the lockable field is `tax_id`. `id`, `name`, `email`,
+`phone`, `currency`, `kind`, `roles`, `website` and `metadata` are unchanged.
+This client needs service 0.6.0 or later; the service still reads the old
+names in a request, so an older client keeps writing but reads undefined for
+the renamed fields. The GraphQL module keeps its camelCase field names.

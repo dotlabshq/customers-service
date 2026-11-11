@@ -6,8 +6,8 @@ import {
 
 type App = Awaited<ReturnType<typeof makeTestApp>>
 type Customer = {
-  id: string; shortId: string; name: string
-  email: string | null; externalId: string | null; currency: string | null
+  id: string; short_id: string; name: string
+  email: string | null; external_id: string | null; currency: string | null
 }
 
 let fb: TestFoldBase
@@ -61,7 +61,7 @@ describe('customers', () => {
     const { customer } = await json<{ customer: Customer }>(res)
     expect(customer).toMatchObject({ name: 'Acme GmbH', email: 'billing@acme.test', currency: 'EUR' })
 
-    for (const ref of [customer.id, customer.shortId]) {
+    for (const ref of [customer.id, customer.short_id]) {
       const got = await json<{ customer: Customer }>(await app.get(`/customers/${ref}`))
       expect(got.customer.id).toBe(customer.id)
     }
@@ -83,7 +83,7 @@ describe('customers', () => {
   })
 
   it('resolves a customer by the id it has in the caller\'s own system', async () => {
-    await create({ name: 'Acme', externalId: 'CUST-99' })
+    await create({ name: 'Acme', external_id: 'CUST-99' })
     const found = await json<{ customer: Customer }>(await app.get('/customers?external_id=CUST-99'))
     expect(found.customer.name).toBe('Acme')
 
@@ -91,15 +91,15 @@ describe('customers', () => {
   })
 
   it('refuses a second customer with the same external id', async () => {
-    await create({ name: 'First', externalId: 'CUST-1' })
-    expect((await create({ name: 'Second', externalId: 'CUST-1' })).status).toBe(409)
+    await create({ name: 'First', external_id: 'CUST-1' })
+    expect((await create({ name: 'Second', external_id: 'CUST-1' })).status).toBe(409)
   })
 
   it('changes only the fields it is given', async () => {
     const { customer } = await json<{ customer: Customer }>(
       await create({ name: 'Before', email: 'keep@acme.test', currency: 'EUR' }),
     )
-    const res = await app.patch(`/customers/${customer.shortId}`, { name: 'After' })
+    const res = await app.patch(`/customers/${customer.short_id}`, { name: 'After' })
     expect(res.status).toBe(200)
 
     const after = (await json<{ customer: Customer }>(res)).customer

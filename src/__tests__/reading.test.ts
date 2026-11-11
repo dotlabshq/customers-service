@@ -7,7 +7,7 @@ import { bootTestFoldBase, fakeOrgService, makeTestApp, newOrgId, type TestFoldB
 
 type App = Awaited<ReturnType<typeof makeTestApp>>
 type Customer = { id: string; name: string }
-type Page = { customers: Customer[]; nextCursor: string | null }
+type Page = { customers: Customer[]; next_cursor: string | null }
 type Changes = { changes: { seq: number; type: string; id: string; actor: string; at: number }[]; cursor: string }
 
 let fb: TestFoldBase
@@ -54,8 +54,8 @@ describe('search', () => {
   it('finds text in name, email, website, tax id and external id, with the other filters', async () => {
     await make({ name: 'Acme GmbH', email: 'billing@acme.test' })
     await make({ name: 'Beta', website: 'beta-acme.example' })
-    await make({ name: 'Gamma', taxId: '99ACME11' })
-    await make({ name: 'Delta', externalId: 'crm-acme-7' })
+    await make({ name: 'Gamma', tax_id: '99ACME11' })
+    await make({ name: 'Delta', external_id: 'crm-acme-7' })
     await make({ name: 'Ada Acme', kind: 'person' })
     await make({ name: 'Other' })
     const found = async (q: string) => (await page(q)).customers.map((c) => c.name).sort()
@@ -82,7 +82,7 @@ describe('a cursor walks the whole directory', () => {
     do {
       const p: Page = await page(`?limit=3${cursor ? `&cursor=${cursor}` : ''}`)
       seen.push(...p.customers.map((c) => c.id))
-      cursor = p.nextCursor
+      cursor = p.next_cursor
       pages++
     } while (cursor)
     expect(pages).toBe(3)
@@ -93,14 +93,14 @@ describe('a cursor walks the whole directory', () => {
     for (let i = 0; i < 4; i++) await make({ name: `C${i}` })
     const first = await page('?limit=2')
     await make({ name: 'Late' })
-    const second = await page(`?limit=2&cursor=${first.nextCursor}`)
+    const second = await page(`?limit=2&cursor=${first.next_cursor}`)
     expect([...first.customers, ...second.customers].map((c) => c.name)).toEqual(['C3', 'C2', 'C1', 'C0'])
-    expect(second.nextCursor).toBeNull()
+    expect(second.next_cursor).toBeNull()
   })
 
   it('a full last page still ends, and a cursor nobody gave is 400', async () => {
     await make({ name: 'A' }); await make({ name: 'B' })
-    expect((await page('?limit=2')).nextCursor).toBeNull()
+    expect((await page('?limit=2')).next_cursor).toBeNull()
     const res = await app.get('/api/customers?cursor=not-a-cursor')
     expect(res.status).toBe(400)
     expect(await json(res)).toMatchObject({ error: 'invalid_cursor' })

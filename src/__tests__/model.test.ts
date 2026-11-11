@@ -11,8 +11,8 @@ import {
 
 type App = Awaited<ReturnType<typeof makeTestApp>>
 type Customer = {
-  id: string; shortId: string; name: string; kind: string; roles: string[]; website: string | null
-  email: string | null; lockedFields: string[]; externalId: string | null
+  id: string; short_id: string; name: string; kind: string; roles: string[]; website: string | null
+  email: string | null; locked_fields: string[]; external_id: string | null
 }
 type Link = { id: string; title: string | null; person: { id: string; name: string }; company: { id: string; name: string } }
 
@@ -35,11 +35,11 @@ afterEach(() => restore())
 describe('kind, roles and website', () => {
   it('a record is a company that is a customer unless it says otherwise', async () => {
     const c = await make({ name: 'Acme' })
-    expect(c).toMatchObject({ kind: 'company', roles: ['customer'], website: null, lockedFields: [] })
+    expect(c).toMatchObject({ kind: 'company', roles: ['customer'], website: null, locked_fields: [] })
   })
 
   it('one record can be a customer and a supplier, and is found by either role, by kind and by tax id', async () => {
-    await make({ name: 'Acme', roles: ['supplier', 'customer'], website: 'acme.test', taxId: '1234567890' })
+    await make({ name: 'Acme', roles: ['supplier', 'customer'], website: 'acme.test', tax_id: '1234567890' })
     await make({ name: 'Beta', roles: ['supplier'] })
     await make({ name: 'Ada', kind: 'person', roles: ['employee'] })
     expect(await names('?role=supplier')).toEqual(['Acme', 'Beta'])
@@ -64,15 +64,15 @@ describe('kind, roles and website', () => {
 describe('a locked field is left as the person set it', () => {
   it('a later write skips it, says so, and applies the rest', async () => {
     const c = await make({ name: 'Acme', email: 'a@acme.test' })
-    const locked = await json<{ customer: Customer; skippedFields: string[] }>(
+    const locked = await json<{ customer: Customer; skipped_fields: string[] }>(
       await app.patch(`/api/customers/${c.id}`, { name: 'Acme GmbH', lock: ['name'] }))
     // Set and lock in one request: the value lands, then the lock.
-    expect(locked.customer).toMatchObject({ name: 'Acme GmbH', lockedFields: ['name'] })
-    expect(locked.skippedFields).toEqual([])
+    expect(locked.customer).toMatchObject({ name: 'Acme GmbH', locked_fields: ['name'] })
+    expect(locked.skipped_fields).toEqual([])
 
-    const sync = await json<{ customer: Customer; skippedFields: string[] }>(
+    const sync = await json<{ customer: Customer; skipped_fields: string[] }>(
       await app.patch(`/api/customers/${c.id}`, { name: 'ACME (import)', email: 'new@acme.test' }, { token: makeServiceToken('importer'), org: orgId }))
-    expect(sync.skippedFields).toEqual(['name'])
+    expect(sync.skipped_fields).toEqual(['name'])
     expect(sync.customer).toMatchObject({ name: 'Acme GmbH', email: 'new@acme.test' })
   })
 
@@ -81,15 +81,15 @@ describe('a locked field is left as the person set it', () => {
     await app.patch(`/api/customers/${c.id}`, { lock: ['name'] })
     const res = await app.patch(`/api/customers/${c.id}`, { name: 'Other' })
     expect(res.status).toBe(200)
-    expect(await json(res)).toMatchObject({ customer: { name: 'Acme' }, skippedFields: ['name'] })
+    expect(await json(res)).toMatchObject({ customer: { name: 'Acme' }, skipped_fields: ['name'] })
   })
 
   it('unlock and change is one request', async () => {
     const c = await make({ name: 'Acme' })
     await app.patch(`/api/customers/${c.id}`, { lock: ['name'] })
-    const res = await json<{ customer: Customer; skippedFields: string[] }>(
+    const res = await json<{ customer: Customer; skipped_fields: string[] }>(
       await app.patch(`/api/customers/${c.id}`, { name: 'Acme AG', unlock: ['name'] }))
-    expect(res).toMatchObject({ customer: { name: 'Acme AG', lockedFields: [] }, skippedFields: [] })
+    expect(res).toMatchObject({ customer: { name: 'Acme AG', locked_fields: [] }, skipped_fields: [] })
   })
 
   it('only a person locks or unlocks', async () => {
@@ -104,7 +104,7 @@ describe('a locked field is left as the person set it', () => {
 
 describe('an archived record comes back', () => {
   it('whole, under the same id and short id, with its locks', async () => {
-    const c = await make({ name: 'Acme', kind: 'company', roles: ['supplier'], website: 'acme.test', externalId: 'crm-1' })
+    const c = await make({ name: 'Acme', kind: 'company', roles: ['supplier'], website: 'acme.test', external_id: 'crm-1' })
     await app.patch(`/api/customers/${c.id}`, { email: 'a@acme.test', lock: ['email'] })
     expect((await app.del(`/api/customers/${c.id}`)).status).toBe(204)
     expect((await app.get(`/api/customers/${c.id}`)).status).toBe(404)
@@ -113,8 +113,8 @@ describe('an archived record comes back', () => {
     expect(res.status).toBe(200)
     const back = (await json<{ customer: Customer }>(res)).customer
     expect(back).toMatchObject({
-      id: c.id, shortId: c.shortId, name: 'Acme', roles: ['supplier'], website: 'acme.test',
-      externalId: 'crm-1', email: 'a@acme.test', lockedFields: ['email'],
+      id: c.id, short_id: c.short_id, name: 'Acme', roles: ['supplier'], website: 'acme.test',
+      external_id: 'crm-1', email: 'a@acme.test', locked_fields: ['email'],
     })
     expect(await names('')).toEqual(['Acme'])
   })
@@ -126,9 +126,9 @@ describe('an archived record comes back', () => {
   })
 
   it('is refused while another record holds its external id', async () => {
-    const c = await make({ name: 'Acme', externalId: 'crm-1' })
+    const c = await make({ name: 'Acme', external_id: 'crm-1' })
     await app.del(`/api/customers/${c.id}`)
-    await make({ name: 'Acme again', externalId: 'crm-1' })
+    await make({ name: 'Acme again', external_id: 'crm-1' })
     const res = await app.post(`/api/customers/${c.id}/restore`, {})
     expect(res.status).toBe(409)
     expect(await json(res)).toMatchObject({ error: 'external_id_taken' })
@@ -147,7 +147,7 @@ describe('a person is linked to a company', () => {
   it('from either side, with a title, and both sides see it', async () => {
     const acme = await make({ name: 'Acme' })
     const ada = await make({ name: 'Ada', kind: 'person' })
-    const res = await app.post(`/api/customers/${acme.id}/links`, { to: ada.shortId, title: 'CFO' })
+    const res = await app.post(`/api/customers/${acme.id}/links`, { to: ada.short_id, title: 'CFO' })
     expect(res.status).toBe(201)
     const link = (await json<{ link: Link }>(res)).link
     expect(link).toMatchObject({ title: 'CFO', person: { id: ada.id, name: 'Ada' }, company: { id: acme.id, name: 'Acme' } })
@@ -217,7 +217,7 @@ describe('a record written before 0.4.0', () => {
   it('reads as a company that is a customer, and is found as one', async () => {
     const id = await legacy('Old Co')
     const c = (await json<{ customer: Customer }>(await app.get(`/api/customers/${id}`))).customer
-    expect(c).toMatchObject({ kind: 'company', roles: ['customer'], website: null, lockedFields: [] })
+    expect(c).toMatchObject({ kind: 'company', roles: ['customer'], website: null, locked_fields: [] })
     expect(await names('?kind=company')).toEqual(['Old Co'])
     expect(await names('?role=customer')).toEqual(['Old Co'])
     expect(await names('?kind=person')).toEqual([])
@@ -227,7 +227,7 @@ describe('a record written before 0.4.0', () => {
   it('takes the new fields on its next update', async () => {
     const id = await legacy('Old Co')
     const res = await json<{ customer: Customer }>(await app.patch(`/api/customers/${id}`, { roles: ['supplier'], lock: ['name'] }))
-    expect(res.customer).toMatchObject({ name: 'Old Co', kind: 'company', roles: ['supplier'], lockedFields: ['name'] })
+    expect(res.customer).toMatchObject({ name: 'Old Co', kind: 'company', roles: ['supplier'], locked_fields: ['name'] })
   })
 
   it('comes back if it was archived then', async () => {
@@ -235,5 +235,26 @@ describe('a record written before 0.4.0', () => {
     const res = await app.post(`/api/customers/${id}/restore`, {})
     expect(res.status).toBe(200)
     expect((await json<{ customer: Customer }>(res)).customer).toMatchObject({ name: 'Old Co', kind: 'company', roles: ['customer'] })
+  })
+})
+
+describe('a caller that still speaks camelCase', () => {
+  it('is read the way it meant, and answered in snake_case', async () => {
+    const res = await app.post('/api/customers', { name: 'Acme', externalId: 'crm-9', taxId: '123', address: { city: 'Berlin', postalCode: '10115' } })
+    expect(res.status).toBe(201)
+    const c = (await json<{ customer: Record<string, unknown> }>(res)).customer
+    expect(c).toMatchObject({ external_id: 'crm-9', tax_id: '123', address: { city: 'Berlin', postal_code: '10115' } })
+    for (const old of ['externalId', 'taxId', 'shortId', 'createdAt', 'lockedFields']) expect(c).not.toHaveProperty(old)
+
+    const patched = await json<{ customer: Record<string, unknown>; skipped_fields: string[] }>(
+      await app.patch(`/api/customers/${c['id']}`, { taxId: '456', lock: ['taxId'] }))
+    expect(patched.customer).toMatchObject({ tax_id: '456', locked_fields: ['tax_id'] })
+    const skipped = await json<{ skipped_fields: string[] }>(await app.patch(`/api/customers/${c['id']}`, { tax_id: '789' }))
+    expect(skipped.skipped_fields).toEqual(['tax_id'])
+  })
+
+  it('the new name wins when both are sent', async () => {
+    const c = await make({ name: 'Acme', tax_id: 'new', taxId: 'old' })
+    expect((c as unknown as { tax_id: string }).tax_id).toBe('new')
   })
 })

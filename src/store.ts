@@ -71,29 +71,41 @@ const decodeRoles = (s: string | null | undefined): CustomerRole[] => {
   const roles = (s ?? '').split(',').filter(Boolean) as CustomerRole[]
   return roles.length ? roles : ['customer']
 }
+// Locks written before 0.6.0 name the field the way the wire did then.
 const decodeLocked = (s: string | null | undefined): LockableField[] =>
-  parseJson<string[]>(s, []).filter((f): f is LockableField => (LOCKABLE_FIELDS as readonly string[]).includes(f))
+  parseJson<string[]>(s, [])
+    .map((f) => (f === 'taxId' ? 'tax_id' : f))
+    .filter((f): f is LockableField => (LOCKABLE_FIELDS as readonly string[]).includes(f))
 const kindOf = (s: string | null | undefined): CustomerKind => (s === 'person' ? 'person' : 'company')
 
+/** An address as the wire names it. Ones stored before 0.6.0 say `postalCode`. */
+function toAddress(raw: string): Address | null {
+  const a = parseJson<Record<string, string>>(raw, {})
+  if ('postalCode' in a) {
+    a['postal_code'] ??= a['postalCode']!
+    delete a['postalCode']
+  }
+  return Object.keys(a).length ? (a as Address) : null
+}
+
 function toCustomer(r: CustomerRow): Customer {
-  const address = parseJson<Address>(r.address, {})
   return {
     id: r.id,
-    shortId: r.short_id,
-    externalId: orNull(r.external_id),
+    short_id: r.short_id,
+    external_id: orNull(r.external_id),
     kind: kindOf(r.kind),
     roles: decodeRoles(r.roles),
     name: r.name,
     website: orNull(r.website ?? ''),
-    lockedFields: decodeLocked(r.locked),
+    locked_fields: decodeLocked(r.locked),
     email: orNull(r.email),
     phone: orNull(r.phone),
-    taxId: orNull(r.tax_id),
+    tax_id: orNull(r.tax_id),
     currency: orNull(r.currency),
-    address: Object.keys(address).length ? address : null,
+    address: toAddress(r.address),
     metadata: parseJson<Record<string, unknown>>(r.metadata, {}),
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
   }
 }
 
@@ -153,7 +165,7 @@ export function createStore(fb: FoldBase) {
     if (opts.kind === 'company') where.push({ or: [{ kind: { eq: 'company' } }, { kind: { eq: null } }] })
     if (opts.role === 'customer') where.push({ or: [{ roles: { like: '%,customer,%' } }, { roles: { eq: null } }] })
     else if (opts.role) where.push({ roles: { like: `%,${opts.role},%` } })
-    if (opts.taxId) where.push({ tax_id: { eq: opts.taxId } })
+    if (opts.tax_id) where.push({ tax_id: { eq: opts.tax_id } })
     // `%` and `_` are LIKE's own; a search for them would match everything.
     const text = (opts.q ?? '').replace(/[%_]/g, '').trim()
     if (text) {
@@ -172,7 +184,7 @@ export function createStore(fb: FoldBase) {
     const last = rows[rows.length - 1]
     return {
       customers: rows.map(toCustomer),
-      nextCursor: res.rows.length > limit && last ? writeCursor(last.created_at, last.id) : null,
+      next_cursor: res.rows.length > limit && last ? writeCursor(last.created_at, last.id) : null,
     }
   }
 
@@ -216,18 +228,18 @@ export function createStore(fb: FoldBase) {
 
   async function createCustomer(orgId: string, input: CreateCustomerInput, actor: string): Promise<Customer> {
     const { customers } = scoped(orgId)
-    if (input.externalId) {
-      const dup = await getByExternalId(orgId, input.externalId)
-      if (dup) throw new StoreError(409, 'external_id_taken', `Customer with external_id '${input.externalId}' already exists`)
+    if (input.external_id) {
+      const dup = await getByExternalId(orgId, input.external_id)
+      if (dup) throw new StoreError(409, 'external_id_taken', `Customer with external_id '${input.external_id}' already exists`)
     }
     const id = CustomerEvents.newId()
     const now = Date.now()
     await customers.emit(id, 0, 'CustomerCreated', {
-      externalId: input.externalId ?? '',
+      externalId: input.external_id ?? '',
       name: input.name,
       email: input.email ?? '',
       phone: input.phone ?? '',
-      taxId: input.taxId ?? '',
+      taxId: input.tax_id ?? '',
       currency: input.currency ?? '',
       address: input.address ? JSON.stringify(input.address) : '{}',
       metadata: input.metadata ? JSON.stringify(input.metadata) : '{}',
@@ -257,15 +269,15 @@ export function createStore(fb: FoldBase) {
     for (const f of patch.unlock ?? []) lockedNow.delete(f)
     // What this write may not touch: locked before it, and not unlocked by it.
     const held = new Set(lockedNow)
-    const skippedFields = LOCKABLE_FIELDS.filter((f) => patch[f] !== undefined && held.has(f))
+    const skipped_fields = LOCKABLE_FIELDS.filter((f) => patch[f] !== undefined && held.has(f))
     const take = <K extends LockableField>(f: K): UpdateCustomerInput[K] | undefined =>
       held.has(f) ? undefined : patch[f]
     for (const f of patch.lock ?? []) lockedNow.add(f)
     const locked = JSON.stringify(LOCKABLE_FIELDS.filter((f) => lockedNow.has(f)))
 
-    if (patch.externalId && patch.externalId !== row.external_id) {
-      const dup = await getByExternalId(orgId, patch.externalId)
-      if (dup) throw new StoreError(409, 'external_id_taken', `Customer with external_id '${patch.externalId}' already exists`)
+    if (patch.external_id && patch.external_id !== row.external_id) {
+      const dup = await getByExternalId(orgId, patch.external_id)
+      if (dup) throw new StoreError(409, 'external_id_taken', `Customer with external_id '${patch.external_id}' already exists`)
     }
     const mergedMeta = patch.metadata
       ? { ...parseJson<Record<string, unknown>>(row.metadata, {}), ...patch.metadata }
@@ -274,11 +286,11 @@ export function createStore(fb: FoldBase) {
 
     const before = snapshotOf(row)
     const after = {
-      externalId: patch.externalId ?? row.external_id,
+      externalId: patch.external_id ?? row.external_id,
       name: take('name') ?? row.name,
       email: take('email') ?? row.email,
       phone: take('phone') ?? row.phone,
-      taxId: take('taxId') ?? row.tax_id,
+      taxId: take('tax_id') ?? row.tax_id,
       currency: take('currency') ?? row.currency,
       address: address ? JSON.stringify(address) : row.address,
       metadata: JSON.stringify(mergedMeta),
@@ -292,7 +304,7 @@ export function createStore(fb: FoldBase) {
     if (changed) {
       await customers.emit(row.id, expected, 'CustomerUpdated', { ...after, at: Date.now() }, { actor }).catch(onConflict)
     }
-    return { customer: (await getCustomer(orgId, row.id))!, skippedFields }
+    return { customer: (await getCustomer(orgId, row.id))!, skipped_fields }
   }
 
   async function archiveCustomer(orgId: string, ref: string, actor: string): Promise<void> {
@@ -361,12 +373,12 @@ export function createStore(fb: FoldBase) {
     const { q } = scoped(orgId)
     const ids = [...new Set(rows.flatMap((r) => [r.person_id, r.company_id]))]
     const parties = await q.query<CustomerRow>('customers', { where: { id: { in: ids } }, limit: ids.length })
-    const byId = new Map(parties.rows.map((r) => [r.id, { id: r.id, shortId: r.short_id, name: r.name }]))
+    const byId = new Map(parties.rows.map((r) => [r.id, { id: r.id, short_id: r.short_id, name: r.name }]))
     // A link whose other side is archived is not shown; it returns with the record.
     return rows.flatMap((r) => {
       const person = byId.get(r.person_id)
       const company = byId.get(r.company_id)
-      return person && company ? [{ id: r.id, person, company, title: orNull(r.title), createdAt: r.created_at }] : []
+      return person && company ? [{ id: r.id, person, company, title: orNull(r.title), created_at: r.created_at }] : []
     })
   }
 

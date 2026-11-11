@@ -131,10 +131,10 @@ export class CustomersClient {
     if (opts.q) q.set('q', opts.q)
     if (opts.kind) q.set('kind', opts.kind)
     if (opts.role) q.set('role', opts.role)
-    if (opts.taxId) q.set('tax_id', opts.taxId)
+    if (opts.tax_id) q.set('tax_id', opts.tax_id)
     const qs = q.toString()
-    const r = await this.api<{ customers: Customer[]; nextCursor?: string | null }>('GET', `/customers${qs ? `?${qs}` : ''}`)
-    return { customers: r.customers, nextCursor: r.nextCursor ?? null }
+    const r = await this.api<{ customers: Customer[]; next_cursor?: string | null }>('GET', `/customers${qs ? `?${qs}` : ''}`)
+    return { customers: r.customers, next_cursor: r.next_cursor ?? null }
   }
   /** Every record that matches, page by page. */
   async *all(opts: Omit<ListCustomersOptions, 'cursor' | 'offset'> = {}): AsyncGenerator<Customer> {
@@ -142,7 +142,7 @@ export class CustomersClient {
     do {
       const page = await this.page({ limit: 200, ...opts, ...(cursor ? { cursor } : {}) })
       yield* page.customers
-      cursor = page.nextCursor ?? undefined
+      cursor = page.next_cursor ?? undefined
     } while (cursor)
   }
   /** Several records by id, in one request (at most 100). Ids that name nothing are left out. */
@@ -180,8 +180,8 @@ export class CustomersClient {
   }
   /** As `update`, and also says which locked fields the write left alone. */
   async updateWithResult(ref: string, input: UpdateCustomerInput): Promise<UpdateResult> {
-    const r = await this.api<{ customer: Customer; skippedFields?: UpdateResult['skippedFields'] }>('PATCH', `/customers/${ref}`, input)
-    return { customer: r.customer, skippedFields: r.skippedFields ?? [] }
+    const r = await this.api<{ customer: Customer; skipped_fields?: UpdateResult['skipped_fields'] }>('PATCH', `/customers/${ref}`, input)
+    return { customer: r.customer, skipped_fields: r.skipped_fields ?? [] }
   }
   /** Archive. The record leaves every list; `restore` brings it back. */
   async delete(ref: string): Promise<void> {

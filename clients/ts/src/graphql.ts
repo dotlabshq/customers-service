@@ -29,6 +29,12 @@ export const typeDefs = /* GraphQL */ `
 `
 
 export const resolvers = {
+  // GraphQL names its fields in camelCase; the service's wire is snake_case.
+  Customer: {
+    shortId: (c: { short_id: string }) => c.short_id,
+    externalId: (c: { external_id: string | null }) => c.external_id,
+    createdAt: (c: { created_at: number }) => c.created_at,
+  },
   Query: {
     customer: (_: unknown, { ref }: { ref: string }, ctx: CustomersGraphContext) => ctx.customers.get(ref).catch(() => null),
     customers: (_: unknown, args: { limit?: number; offset?: number }, ctx: CustomersGraphContext) => ctx.customers.list(args),

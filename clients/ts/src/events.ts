@@ -23,8 +23,8 @@ import { defineAggregate } from '@baseworks/foldbase'
  */
 export const CUSTOMER_KINDS = ['company', 'person'] as const
 export const CUSTOMER_ROLES = ['customer', 'supplier', 'employee', 'partner'] as const
-/** The fields a person may lock. */
-export const LOCKABLE_FIELDS = ['name', 'email', 'phone', 'website', 'taxId', 'currency', 'address'] as const
+/** The fields a person may lock, as the wire names them. */
+export const LOCKABLE_FIELDS = ['name', 'email', 'phone', 'website', 'tax_id', 'currency', 'address'] as const
 
 const snapshot = {
   externalId: z.string(), // the id in the user's own third-party system; '' if none

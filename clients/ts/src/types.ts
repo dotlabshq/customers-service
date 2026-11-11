@@ -1,5 +1,5 @@
-// Customer domain types. Foldbase-native: read-model row shape (snake_case, as
-// stored) and the REST DTO (camelCase, as API + CLI consume).
+// Customer domain types: the read-model row as stored, and the REST DTO.
+// Both are snake_case; the wire was camelCase before 0.6.0 of the service.
 
 // ── read-model row (snake_case — foldbase read_customers table) ───────────────
 
@@ -32,14 +32,14 @@ export interface LinkRow {
   updated_at: number
 }
 
-// ── REST DTO (camelCase — API responses + CLI input) ──────────────────────────
+// ── REST DTO (snake_case, as every service in the realm speaks: ADR-043) ──────────────────────────
 
 export interface Address {
   line1?: string
   line2?: string
   city?: string
   state?: string
-  postalCode?: string
+  postal_code?: string
   country?: string
 }
 
@@ -47,27 +47,27 @@ export type CustomerKind = 'company' | 'person'
 /** What the party is to the organization. One record can be several. */
 export type CustomerRole = 'customer' | 'supplier' | 'employee' | 'partner'
 /** A field a person may lock, so later writes leave it as it is. */
-export type LockableField = 'name' | 'email' | 'phone' | 'website' | 'taxId' | 'currency' | 'address'
+export type LockableField = 'name' | 'email' | 'phone' | 'website' | 'tax_id' | 'currency' | 'address'
 
 export interface Customer {
   id: string
-  shortId: string
+  short_id: string
   /** The id in the user's own third-party system. One per record; anything more belongs in `metadata`. */
-  externalId: string | null
+  external_id: string | null
   kind: CustomerKind
   roles: CustomerRole[]
   name: string
   website: string | null
   /** Fields a person has locked. A write that names one skips it. */
-  lockedFields: LockableField[]
+  locked_fields: LockableField[]
   email: string | null
   phone: string | null
-  taxId: string | null
+  tax_id: string | null
   currency: string | null
   address: Address | null
   metadata: Record<string, unknown>
-  createdAt: number
-  updatedAt: number
+  created_at: number
+  updated_at: number
 }
 
 export interface CreateCustomerInput {
@@ -77,10 +77,10 @@ export interface CreateCustomerInput {
   /** Default `['customer']`. */
   roles?: CustomerRole[]
   website?: string
-  externalId?: string
+  external_id?: string
   email?: string
   phone?: string
-  taxId?: string
+  tax_id?: string
   currency?: string
   address?: Address
   metadata?: Record<string, unknown>
@@ -95,10 +95,10 @@ export interface UpdateCustomerInput {
   lock?: LockableField[]
   /** Unlock these fields (before this write is applied). A person only. */
   unlock?: LockableField[]
-  externalId?: string
+  external_id?: string
   email?: string
   phone?: string
-  taxId?: string
+  tax_id?: string
   currency?: string
   address?: Address
   metadata?: Record<string, unknown>
@@ -107,26 +107,26 @@ export interface UpdateCustomerInput {
 /** What an update did: the record, and the locked fields it left alone. */
 export interface UpdateResult {
   customer: Customer
-  skippedFields: LockableField[]
+  skipped_fields: LockableField[]
 }
 
 export interface ListCustomersOptions {
   limit?: number
   /** Skip this many. Ignored when `cursor` is given; prefer `cursor` for walking a whole directory. */
   offset?: number
-  /** Where the previous page ended (`nextCursor`). */
+  /** Where the previous page ended (`next_cursor`). */
   cursor?: string
   /** Text to find in name, email, website, tax id or external id. */
   q?: string
   kind?: CustomerKind
   role?: CustomerRole
-  taxId?: string
+  tax_id?: string
 }
 
 /** One side of a link, enough to show it. */
 export interface LinkParty {
   id: string
-  shortId: string
+  short_id: string
   name: string
 }
 
@@ -137,13 +137,13 @@ export interface CustomerLink {
   company: LinkParty
   /** What the person is there (`CFO`, `Purchasing`); null if not said. */
   title: string | null
-  createdAt: number
+  created_at: number
 }
 
 /** One page of a list, and where the next one starts (null at the end). */
 export interface CustomerPage {
   customers: Customer[]
-  nextCursor: string | null
+  next_cursor: string | null
 }
 
 /**

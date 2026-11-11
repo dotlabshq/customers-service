@@ -21,12 +21,12 @@ export interface CustomersCliDeps {
 
 type CustomerRow = {
   id: string
-  shortId: string
-  externalId: string | null
+  short_id: string
+  external_id: string | null
   name: string
   email: string | null
   currency: string | null
-  createdAt?: number
+  created_at?: number
 }
 
 const die = (e: unknown): never => fatal(e instanceof Error ? e.message : String(e))
@@ -49,12 +49,12 @@ export function buildCustomersCommand(deps: CustomersCliDeps): Command {
     const res = await http.get<{ customers: CustomerRow[] }>('/customers').catch(die)
     printOutput(res.customers, opts.output, (wide) => {
       table(res.customers, [
-        { key: 'shortId', label: 'ID' },
+        { key: 'short_id', label: 'ID' },
         { key: 'name', label: 'NAME' },
         { key: 'email', label: 'EMAIL', fmt: (v) => (v as string) ?? '' },
-        { key: 'externalId', label: 'EXTERNAL', wide: true, fmt: (v) => (v as string) ?? '' },
+        { key: 'external_id', label: 'EXTERNAL', wide: true, fmt: (v) => (v as string) ?? '' },
         { key: 'currency', label: 'CUR', wide: true, fmt: (v) => (v as string) ?? '' },
-        { key: 'createdAt', label: 'CREATED', wide: true, fmt: (v) => fmtDate(v as number) },
+        { key: 'created_at', label: 'CREATED', wide: true, fmt: (v) => fmtDate(v as number) },
         { key: 'id', label: 'FULL ID', wide: true },
       ] as ColDef<CustomerRow>[], { wide, emptyHint: `No customers yet.  Run: ${cli} customers create --name <n>` })
       summary(`${res.customers.length} customer${res.customers.length !== 1 ? 's' : ''}`)
@@ -94,14 +94,14 @@ export function buildCustomersCommand(deps: CustomersCliDeps): Command {
           name: opts.name,
           ...(opts.email ? { email: opts.email } : {}),
           ...(opts.phone ? { phone: opts.phone } : {}),
-          ...(opts.externalId ? { externalId: opts.externalId } : {}),
-          ...(opts.taxId ? { taxId: opts.taxId } : {}),
+          ...(opts.externalId ? { external_id: opts.externalId } : {}),
+          ...(opts.taxId ? { tax_id: opts.taxId } : {}),
           ...(opts.currency ? { currency: opts.currency } : {}),
           ...(opts.meta ? { metadata: parseKvPairs(opts.meta) } : {}),
         }
         const res = await http.post<{ customer: CustomerRow }>('/customers', body).catch(die)
         success(`Customer created: ${res.customer.name}`)
-        kv([['id', res.customer.shortId], ['name', res.customer.name]])
+        kv([['id', res.customer.short_id], ['name', res.customer.name]])
       }),
   )
 
@@ -114,12 +114,12 @@ export function buildCustomersCommand(deps: CustomersCliDeps): Command {
         const cst = res.customer as Record<string, unknown>
         printOutput(cst, opts.output, () => {
           kv([
-            ['id', String(cst['shortId'])],
+            ['id', String(cst['short_id'])],
             ['name', String(cst['name'])],
             ['email', (cst['email'] as string) ?? '—'],
             ['phone', (cst['phone'] as string) ?? '—'],
-            ['external_id', (cst['externalId'] as string) ?? '—'],
-            ['tax_id', (cst['taxId'] as string) ?? '—'],
+            ['external_id', (cst['external_id'] as string) ?? '—'],
+            ['tax_id', (cst['tax_id'] as string) ?? '—'],
             ['currency', (cst['currency'] as string) ?? '—'],
             ['full_id', String(cst['id'])],
           ])
@@ -147,14 +147,14 @@ export function buildCustomersCommand(deps: CustomersCliDeps): Command {
         if (opts.name !== undefined) body['name'] = opts.name
         if (opts.email !== undefined) body['email'] = opts.email
         if (opts.phone !== undefined) body['phone'] = opts.phone
-        if (opts.externalId !== undefined) body['externalId'] = opts.externalId
-        if (opts.taxId !== undefined) body['taxId'] = opts.taxId
+        if (opts.externalId !== undefined) body['external_id'] = opts.externalId
+        if (opts.taxId !== undefined) body['tax_id'] = opts.taxId
         if (opts.currency !== undefined) body['currency'] = opts.currency
         if (opts.meta !== undefined) body['metadata'] = parseKvPairs(opts.meta)
         if (!Object.keys(body).length) { warn('Provide at least one field to update.'); return }
         const res = await http.patch<{ customer: CustomerRow }>(`/customers/${ref}`, body).catch(die)
         success('Customer updated.')
-        kv([['id', res.customer.shortId], ['name', res.customer.name]])
+        kv([['id', res.customer.short_id], ['name', res.customer.name]])
       }),
   )
 

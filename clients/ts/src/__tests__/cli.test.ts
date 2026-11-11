@@ -8,19 +8,19 @@ afterAll(() => server.close())
 
 const CUST = {
   id: '019f6a3e-1111-7c71-beff-496d1be3fd1f',
-  shortId: 'cst9x2',
-  externalId: 'acct-42',
+  short_id: 'cst9x2',
+  external_id: 'acct-42',
   name: 'Acme Co',
   email: 'billing@acme.test',
   phone: null,
-  taxId: null,
+  tax_id: null,
   currency: 'USD',
   address: null,
   metadata: { tier: 'gold' },
-  createdAt: 1784200000000,
+  created_at: 1784200000000,
   updatedAt: 1784200000000,
 }
-const CUST2 = { ...CUST, id: '019f6a3e-2222-7c71-beff-496d1be3fd1f', shortId: 'cst7k1', externalId: 'acct-43', name: 'Beta Inc', email: null, currency: null }
+const CUST2 = { ...CUST, id: '019f6a3e-2222-7c71-beff-496d1be3fd1f', short_id: 'cst7k1', external_id: 'acct-43', name: 'Beta Inc', email: null, currency: null }
 
 describe('dtab customers (list)', () => {
   it('default columns: ID → NAME → EMAIL, no full UUID', async () => {
@@ -69,7 +69,7 @@ describe('dtab customers (list)', () => {
     const r = await run(['customers', '-o', 'json'])
     const parsed = JSON.parse(r.stdout)
     expect(Array.isArray(parsed)).toBe(true)
-    expect(parsed[0].shortId).toBe('cst9x2')
+    expect(parsed[0].short_id).toBe('cst9x2')
   })
 })
 
@@ -81,7 +81,7 @@ describe('dtab customers create', () => {
     const body = captured.body as Record<string, unknown>
     expect(body.name).toBe('Acme Co')
     expect(body.email).toBe('billing@acme.test')
-    expect(body.externalId).toBe('acct-42')
+    expect(body.external_id).toBe('acct-42')
     expect(body.currency).toBe('USD')
     expect(body.metadata).toEqual({ tier: 'gold' })
     expect(r.stdout).toContain('cst9x2')
@@ -90,7 +90,7 @@ describe('dtab customers create', () => {
 })
 
 describe('dtab customers get', () => {
-  it('shows details incl. shortId, hides full UUID from id line', async () => {
+  it('shows details incl. short_id, hides full UUID from id line', async () => {
     mocks.mockGet('/customers/acct-42', { customer: CUST })
     const r = await run(['customers', 'get', 'acct-42'])
     expect(r.exitCode).toBe(0)

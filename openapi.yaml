@@ -61,7 +61,7 @@ paths:
         - { name: external_id, in: query, schema: { type: string } }
         - { name: ids, in: query, schema: { type: string }, description: "Comma-separated ids, at most 100. Answers those records; the other parameters are ignored." }
         - { name: q, in: query, schema: { type: string }, description: "Text in name, email, website, tax id or external id." }
-        - { name: cursor, in: query, schema: { type: string }, description: "nextCursor of the previous page. offset is ignored with it." }
+        - { name: cursor, in: query, schema: { type: string }, description: "next_cursor of the previous page. offset is ignored with it." }
         - { name: kind, in: query, schema: { type: string, enum: [company, person] } }
         - { name: role, in: query, schema: { type: string, enum: [customer, supplier, employee, partner] } }
         - { name: tax_id, in: query, schema: { type: string } }
@@ -78,7 +78,7 @@ paths:
                   customers:
                     type: array
                     items: { $ref: "#/components/schemas/Customer" }
-                  nextCursor: { type: [string, "null"], description: Where the next page starts; null on the last one. }
+                  next_cursor: { type: [string, "null"], description: Where the next page starts; null on the last one. }
                   customer: { $ref: "#/components/schemas/Customer" }
         "400": { description: "org_required (no X-Org-Id), invalid_cursor, invalid_kind, invalid_role or too_many_ids" }
         "403": { description: Not a member of this org, or the permission the route asks for is missing (`permission` names it) }
@@ -128,7 +128,7 @@ paths:
       summary: Change a customer
       description: >-
         At least one field. Absent fields are left alone. A field a person has
-        locked is skipped and named in `skippedFields`; the rest is applied.
+        locked is skipped and named in `skipped_fields`; the rest is applied.
         `unlock` is applied before the write and `lock` after it. Only a person
         locks or unlocks (a service token is answered 403 `person_only`).
       requestBody:
@@ -151,7 +151,7 @@ paths:
                 type: object
                 properties:
                   customer: { $ref: "#/components/schemas/Customer" }
-                  skippedFields: { type: array, items: { $ref: "#/components/schemas/LockableField" } }
+                  skipped_fields: { type: array, items: { $ref: "#/components/schemas/LockableField" } }
         "404": { description: No such customer in this org }
     delete:
       tags: [customers]
@@ -303,7 +303,7 @@ components:
         line2: { type: string }
         city: { type: string }
         state: { type: string }
-        postalCode: { type: string }
+        postal_code: { type: string }
         country: { type: string }
 
     CustomerInput:
@@ -317,49 +317,49 @@ components:
           items: { type: string, enum: [customer, supplier, employee, partner] }
           description: Replaced whole. Default [customer].
         website: { type: string }
-        externalId:
+        external_id:
           type: string
           description: The id in the user's own third-party system. One per record, unique per org.
         email: { type: string, format: email }
         phone: { type: string }
-        taxId: { type: string }
+        tax_id: { type: string }
         currency: { type: string, minLength: 3, maxLength: 3 }
         address: { $ref: "#/components/schemas/Address" }
         metadata: { type: object, additionalProperties: true }
 
     Customer:
       type: object
-      required: [id, shortId, name]
+      required: [id, short_id, name]
       properties:
         id: { type: string }
-        shortId: { type: string }
-        externalId: { type: [string, "null"] }
+        short_id: { type: string }
+        external_id: { type: [string, "null"] }
         kind: { type: string, enum: [company, person] }
         roles: { type: array, items: { type: string, enum: [customer, supplier, employee, partner] } }
         name: { type: string }
         website: { type: [string, "null"] }
-        lockedFields: { type: array, items: { $ref: "#/components/schemas/LockableField" } }
+        locked_fields: { type: array, items: { $ref: "#/components/schemas/LockableField" } }
         email: { type: [string, "null"] }
         phone: { type: [string, "null"] }
-        taxId: { type: [string, "null"] }
+        tax_id: { type: [string, "null"] }
         currency: { type: [string, "null"] }
         address:
           oneOf:
             - { $ref: "#/components/schemas/Address" }
             - { type: "null" }
         metadata: { type: object, additionalProperties: true }
-        createdAt: { type: integer }
-        updatedAt: { type: integer }
+        created_at: { type: integer }
+        updated_at: { type: integer }
 
     LockableField:
       type: string
-      enum: [name, email, phone, website, taxId, currency, address]
+      enum: [name, email, phone, website, tax_id, currency, address]
 
     LinkParty:
       type: object
       properties:
         id: { type: string }
-        shortId: { type: string }
+        short_id: { type: string }
         name: { type: string }
 
     Link:
@@ -369,7 +369,7 @@ components:
         person: { $ref: "#/components/schemas/LinkParty" }
         company: { $ref: "#/components/schemas/LinkParty" }
         title: { type: [string, "null"] }
-        createdAt: { type: integer }
+        created_at: { type: integer }
 
     ServiceManifest:
       type: object
