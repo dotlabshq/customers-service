@@ -67,7 +67,7 @@ export function createApp(fb: FoldBase, orgBaseUrl: string, opts: { org?: OrgAcc
         // Moves only when the HTTP surface breaks callers, not every release.
         api_version: '1.0',
         openapi_url: '/openapi.yaml',
-        capabilities: ['customers', 'external-ids', 'org-scoped', 'permissions', 'kinds', 'roles', 'field-locks', 'restore', 'links'],
+        capabilities: ['customers', 'external-ids', 'org-scoped', 'permissions', 'kinds', 'roles', 'field-locks', 'restore', 'links', 'search', 'cursor-pagination', 'change-feed'],
       }),
     )
 

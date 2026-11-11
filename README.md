@@ -24,7 +24,7 @@ All routes require `Authorization: Bearer <identity-jwt>` + `X-Org-Id: <org>`.
 
 | Method | Path (under `/api`) | Permission | |
 |---|---|---|---|
-| `GET` | `/customers` | `customer.read` | list (`?limit&offset`, `?external_id=` for lookup) |
+| `GET` | `/customers` | `customer.read` | list, search, several by id; see below |
 | `GET` | `/customers/:ref` | `customer.read` | by id / short_id |
 | `POST` | `/customers` | `customer.write` | create |
 | `PATCH` | `/customers/:ref` | `customer.write` | update |
@@ -33,10 +33,30 @@ All routes require `Authorization: Bearer <identity-jwt>` + `X-Org-Id: <org>`.
 | `GET` | `/customers/:ref/links` | `customer.read` | who is at this company, or where this person is |
 | `POST` | `/customers/:ref/links` | `customer.write` | link to another record: `{ to, title? }` |
 | `PATCH` · `DELETE` | `/customers/:ref/links/:linkId` | `customer.write` | change the title, remove the link |
+| `GET` | `/changes` | `customer.read` | what changed, for a service keeping in step |
 | `GET` | `/.well-known/service` · `/openapi.yaml` | none | as every service |
 
-`GET /customers` filters: `?kind=company|person`, `?role=<role>`, `?tax_id=`,
-and `?external_id=` (answers the one record, or 404).
+
+`GET /customers` takes:
+
+- `?kind=company|person`, `?role=<role>`, `?tax_id=` — filters, combinable.
+- `?q=` — text in name, email, website, tax id or external id.
+- `?limit=` (50, at most 500) and `?cursor=` — the answer carries `nextCursor`
+  (null on the last page); pass it back to continue. A walk by cursor neither
+  skips nor repeats a record when others are added meanwhile. `?offset=` still
+  works and is ignored when a cursor is given.
+- `?ids=a,b,c` — those records in one request (at most 100); ids that name
+  nothing are left out.
+- `?external_id=` — the one record, or 404.
+
+**The change feed.** `GET /changes?after=<cursor>&limit=` answers
+`{ changes: [{ seq, type, id, actor, at }], cursor }`, oldest first: the
+record events of this organization (`CustomerCreated`, `CustomerUpdated`,
+`CustomerArchived`, `CustomerRestored`). It says *that* a record changed, not
+what it is now: read those with `?ids=`. Keep `cursor` and pass it as `after`
+next time; with nothing new it comes back unchanged. Start with no `after` for
+everything. `?entity=link` reads the links' feed instead (`LinkCreated`,
+`LinkRetitled`, `LinkRemoved`).
 
 ## The record
 

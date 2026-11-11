@@ -95,3 +95,22 @@ await customers.unlink(companyId, link.id)
 `externalId` is the id in the user's own third-party system: one per record.
 The event catalog gains `CustomerRestored` and the `customer_link` aggregate
 (`LinkEvents`); the read model gains the `customer_links` projection.
+
+## 0.4.0
+
+For customers-service 0.5.0.
+
+```ts
+const { customers: firstPage, nextCursor } = await customers.page({ q: 'acme', kind: 'company', limit: 50 })
+for await (const c of customers.all({ role: 'supplier' })) { /* every supplier, page by page */ }
+
+const some = await customers.getMany([idA, idB])          // one request, at most 100
+
+// Keeping something in step with the directory:
+let cursor = saved                                         // undefined the first time
+const feed = await customers.changes({ after: cursor })
+const fresh = await customers.getMany([...new Set(feed.changes.map((c) => c.id))])
+cursor = feed.cursor                                       // an archived record is simply not in `fresh`
+```
+
+`list()` still answers a plain array.

@@ -8,6 +8,8 @@ import type {
   UpdateCustomerInput,
   UpdateResult,
   ListCustomersOptions,
+  CustomerPage,
+  ChangesPage,
   CustomerKind,
   CustomerRole,
   LockableField,
@@ -51,6 +53,16 @@ function parseJson<T>(s: string | null | undefined, fallback: T): T {
 }
 
 const orNull = (s: string): string | null => (s === '' ? null : s)
+
+// A list cursor is where the last row stood. Opaque to callers; not a secret.
+const writeCursor = (at: number, id: string): string => Buffer.from(`${at}:${id}`).toString('base64url')
+function readCursor(cursor: string): { at: number; id: string } {
+  const raw = Buffer.from(cursor, 'base64url').toString()
+  const i = raw.indexOf(':')
+  const at = Number(raw.slice(0, i))
+  if (i < 1 || !Number.isFinite(at) || !raw.slice(i + 1)) throw new StoreError(400, 'invalid_cursor', 'This cursor is not one this service gave')
+  return { at, id: raw.slice(i + 1) }
+}
 
 // A set of roles is stored as `,customer,supplier,` so one role can be matched
 // with `like '%,supplier,%'`. Rows from before 0.4.0 hold NULL: a customer.
@@ -126,8 +138,14 @@ export function createStore(fb: FoldBase) {
     return null
   }
 
-  async function listCustomers(orgId: string, opts: ListCustomersOptions = {}): Promise<Customer[]> {
+  /**
+   * One page, newest first. The cursor is where the last row stood
+   * (`created_at`, then `id`), so a walk neither skips nor repeats a record
+   * when others are added meanwhile, which an offset cannot promise.
+   */
+  async function listCustomers(orgId: string, opts: ListCustomersOptions = {}): Promise<CustomerPage> {
     const { q } = scoped(orgId)
+    const limit = opts.limit ?? 50
     // Rows from before 0.4.0 hold NULL in `kind` and `roles` and mean a
     // company that is a customer, so those two filters let NULL through.
     const where: unknown[] = []
@@ -136,13 +154,53 @@ export function createStore(fb: FoldBase) {
     if (opts.role === 'customer') where.push({ or: [{ roles: { like: '%,customer,%' } }, { roles: { eq: null } }] })
     else if (opts.role) where.push({ roles: { like: `%,${opts.role},%` } })
     if (opts.taxId) where.push({ tax_id: { eq: opts.taxId } })
+    // `%` and `_` are LIKE's own; a search for them would match everything.
+    const text = (opts.q ?? '').replace(/[%_]/g, '').trim()
+    if (text) {
+      const like = { like: `%${text}%` }
+      where.push({ or: [{ name: like }, { email: like }, { website: like }, { tax_id: like }, { external_id: like }] })
+    }
+    const from = opts.cursor ? readCursor(opts.cursor) : null
+    if (from) where.push({ or: [{ created_at: { lt: from.at } }, { and: [{ created_at: { eq: from.at } }, { id: { lt: from.id } }] }] })
     const res = await q.query<CustomerRow>('customers', {
       ...(where.length ? { where: (where.length === 1 ? where[0] : { and: where }) as never } : {}),
-      sort: ['-created_at'],
-      limit: opts.limit ?? 50,
-      offset: opts.offset ?? 0,
+      sort: ['-created_at', '-id'],
+      limit: limit + 1, // one more, to know whether there is a next page
+      offset: from ? 0 : opts.offset ?? 0,
     })
+    const rows = res.rows.slice(0, limit)
+    const last = rows[rows.length - 1]
+    return {
+      customers: rows.map(toCustomer),
+      nextCursor: res.rows.length > limit && last ? writeCursor(last.created_at, last.id) : null,
+    }
+  }
+
+  /** Several records by id. Ids that name nothing are left out. */
+  async function getMany(orgId: string, ids: string[]): Promise<Customer[]> {
+    if (!ids.length) return []
+    const { q } = scoped(orgId)
+    const res = await q.query<CustomerRow>('customers', { where: { id: { in: ids } }, limit: ids.length })
     return res.rows.map(toCustomer)
+  }
+
+  /**
+   * What happened in this organization's directory after `after`, oldest
+   * first: the events themselves, thinned to what a follower needs to know
+   * which records to read again. The position is foldbase's own sequence.
+   */
+  async function listChanges(orgId: string, opts: { after?: number; limit?: number; entity?: 'customer' | 'link' } = {}): Promise<ChangesPage> {
+    const after = opts.after ?? 0
+    const events = await fb.withTenant(orgId).readAll({
+      fromGlobalSeq: after,
+      limit: opts.limit ?? 100,
+      type: opts.entity === 'link' ? 'customer_link' : 'customer',
+    })
+    const last = events[events.length - 1]
+    return {
+      changes: events.map((e) => ({ seq: e.globalSeq, type: e.type, id: e.streamId, actor: e.actor, at: e.recordedAt })),
+      cursor: String(last ? last.globalSeq : after),
+    }
   }
 
   async function getCustomer(orgId: string, ref: string): Promise<Customer | null> {
@@ -374,7 +432,7 @@ export function createStore(fb: FoldBase) {
   }
 
   return {
-    listCustomers, getCustomer, getByExternalId, createCustomer, updateCustomer, archiveCustomer, restoreCustomer,
+    listCustomers, getMany, listChanges, getCustomer, getByExternalId, createCustomer, updateCustomer, archiveCustomer, restoreCustomer,
     listLinks, addLink, retitleLink, removeLink,
   }
 }

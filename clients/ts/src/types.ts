@@ -112,7 +112,12 @@ export interface UpdateResult {
 
 export interface ListCustomersOptions {
   limit?: number
+  /** Skip this many. Ignored when `cursor` is given; prefer `cursor` for walking a whole directory. */
   offset?: number
+  /** Where the previous page ended (`nextCursor`). */
+  cursor?: string
+  /** Text to find in name, email, website, tax id or external id. */
+  q?: string
   kind?: CustomerKind
   role?: CustomerRole
   taxId?: string
@@ -133,4 +138,32 @@ export interface CustomerLink {
   /** What the person is there (`CFO`, `Purchasing`); null if not said. */
   title: string | null
   createdAt: number
+}
+
+/** One page of a list, and where the next one starts (null at the end). */
+export interface CustomerPage {
+  customers: Customer[]
+  nextCursor: string | null
+}
+
+/**
+ * One thing that happened to a record or a link. The feed says *that* it
+ * changed; read the record itself (`getMany`) for what it is now.
+ */
+export interface CustomerChange {
+  /** Position in the organization's feed. */
+  seq: number
+  /** The event: `CustomerCreated`, `CustomerUpdated`, `CustomerArchived`, `CustomerRestored`, `LinkCreated`, … */
+  type: string
+  /** The record's id, or the link's. */
+  id: string
+  /** Who did it: a user id or a service name. */
+  actor: string
+  at: number
+}
+
+export interface ChangesPage {
+  changes: CustomerChange[]
+  /** Pass as `after` next time. Unchanged when nothing new happened. */
+  cursor: string
 }

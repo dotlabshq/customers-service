@@ -99,14 +99,37 @@ export function customersRouter(store: Store, orgBaseUrl: string, org: OrgAccess
     if (c.req.query('kind') && !kind.success) return c.json({ error: 'invalid_kind', message: `kind is one of ${CUSTOMER_KINDS.join(', ')}` }, 400)
     if (c.req.query('role') && !role.success) return c.json({ error: 'invalid_role', message: `role is one of ${CUSTOMER_ROLES.join(', ')}` }, 400)
     const taxId = c.req.query('tax_id')
-    return c.json({
-      customers: await store.listCustomers(orgId, {
-        limit, offset,
-        ...(kind.success ? { kind: kind.data } : {}),
-        ...(role.success ? { role: role.data } : {}),
-        ...(taxId ? { taxId } : {}),
-      }),
-    })
+    const ids = c.req.query('ids')
+    if (ids !== undefined) {
+      const list = [...new Set(ids.split(',').map((s) => s.trim()).filter(Boolean))]
+      if (list.length > 100) return c.json({ error: 'too_many_ids', message: 'At most 100 ids in one request' }, 400)
+      return c.json({ customers: await store.getMany(orgId, list) })
+    }
+    const cursor = c.req.query('cursor')
+    const q = c.req.query('q')
+    const page = await store.listCustomers(orgId, {
+      limit, offset,
+      ...(cursor ? { cursor } : {}),
+      ...(q ? { q } : {}),
+      ...(kind.success ? { kind: kind.data } : {}),
+      ...(role.success ? { role: role.data } : {}),
+      ...(taxId ? { taxId } : {}),
+    }).catch(fail)
+    return c.json(page)
+  })
+
+  // What changed, for a service that keeps something in step with the
+  // directory. It says which records to read again, not what they are now.
+  app.get('/changes', permit(org, 'customer.read'), async (c) => {
+    const raw = c.req.query('after')
+    const after = raw === undefined || raw === '' ? 0 : Number(raw)
+    if (!Number.isInteger(after) || after < 0) return c.json({ error: 'invalid_cursor', message: 'after is a cursor this feed gave' }, 400)
+    const entity = c.req.query('entity')
+    if (entity !== undefined && entity !== 'customer' && entity !== 'link') {
+      return c.json({ error: 'invalid_entity', message: 'entity is customer or link' }, 400)
+    }
+    const limit = Math.min(parseInt(c.req.query('limit') ?? '100', 10) || 100, 500)
+    return c.json(await store.listChanges(orgOf(c), { after, limit, ...(entity ? { entity } : {}) }))
   })
 
   app.get('/customers/:ref', permit(org, 'customer.read'), async (c) => {

@@ -1,5 +1,6 @@
 import type {
   Customer, CreateCustomerInput, UpdateCustomerInput, UpdateResult, ListCustomersOptions, CustomerLink,
+  CustomerPage, ChangesPage,
 } from './types.js'
 
 export type {
@@ -16,6 +17,9 @@ export type {
   CustomerLink,
   LinkParty,
   LinkRow,
+  CustomerPage,
+  CustomerChange,
+  ChangesPage,
 } from './types.js'
 
 export interface CustomersClientOptions {
@@ -116,15 +120,48 @@ export class CustomersClient {
   // ── customers ─────────────────────────────────────────────────────────────
 
   async list(opts: ListCustomersOptions = {}): Promise<Customer[]> {
+    return (await this.page(opts)).customers
+  }
+  /** One page and the cursor for the next. Walk a directory with `for await (const c of client.all())`. */
+  async page(opts: ListCustomersOptions = {}): Promise<CustomerPage> {
     const q = new URLSearchParams()
     if (opts.limit !== undefined) q.set('limit', String(opts.limit))
     if (opts.offset !== undefined) q.set('offset', String(opts.offset))
+    if (opts.cursor) q.set('cursor', opts.cursor)
+    if (opts.q) q.set('q', opts.q)
     if (opts.kind) q.set('kind', opts.kind)
     if (opts.role) q.set('role', opts.role)
     if (opts.taxId) q.set('tax_id', opts.taxId)
     const qs = q.toString()
-    const { customers } = await this.api<{ customers: Customer[] }>('GET', `/customers${qs ? `?${qs}` : ''}`)
+    const r = await this.api<{ customers: Customer[]; nextCursor?: string | null }>('GET', `/customers${qs ? `?${qs}` : ''}`)
+    return { customers: r.customers, nextCursor: r.nextCursor ?? null }
+  }
+  /** Every record that matches, page by page. */
+  async *all(opts: Omit<ListCustomersOptions, 'cursor' | 'offset'> = {}): AsyncGenerator<Customer> {
+    let cursor: string | undefined
+    do {
+      const page = await this.page({ limit: 200, ...opts, ...(cursor ? { cursor } : {}) })
+      yield* page.customers
+      cursor = page.nextCursor ?? undefined
+    } while (cursor)
+  }
+  /** Several records by id, in one request (at most 100). Ids that name nothing are left out. */
+  async getMany(ids: string[]): Promise<Customer[]> {
+    if (!ids.length) return []
+    const { customers } = await this.api<{ customers: Customer[] }>('GET', `/customers?ids=${ids.map(encodeURIComponent).join(',')}`)
     return customers
+  }
+  /**
+   * What changed since `after` (a cursor from an earlier call; omit to start
+   * from the beginning). `entity: 'link'` reads the links' feed instead.
+   */
+  async changes(opts: { after?: string; limit?: number; entity?: 'customer' | 'link' } = {}): Promise<ChangesPage> {
+    const q = new URLSearchParams()
+    if (opts.after) q.set('after', opts.after)
+    if (opts.limit !== undefined) q.set('limit', String(opts.limit))
+    if (opts.entity) q.set('entity', opts.entity)
+    const qs = q.toString()
+    return this.api<ChangesPage>('GET', `/changes${qs ? `?${qs}` : ''}`)
   }
   async get(ref: string): Promise<Customer> {
     const { customer } = await this.api<{ customer: Customer }>('GET', `/customers/${ref}`)

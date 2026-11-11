@@ -59,6 +59,9 @@ paths:
         a page of the directory.
       parameters:
         - { name: external_id, in: query, schema: { type: string } }
+        - { name: ids, in: query, schema: { type: string }, description: "Comma-separated ids, at most 100. Answers those records; the other parameters are ignored." }
+        - { name: q, in: query, schema: { type: string }, description: "Text in name, email, website, tax id or external id." }
+        - { name: cursor, in: query, schema: { type: string }, description: "nextCursor of the previous page. offset is ignored with it." }
         - { name: kind, in: query, schema: { type: string, enum: [company, person] } }
         - { name: role, in: query, schema: { type: string, enum: [customer, supplier, employee, partner] } }
         - { name: tax_id, in: query, schema: { type: string } }
@@ -75,8 +78,9 @@ paths:
                   customers:
                     type: array
                     items: { $ref: "#/components/schemas/Customer" }
+                  nextCursor: { type: [string, "null"], description: Where the next page starts; null on the last one. }
                   customer: { $ref: "#/components/schemas/Customer" }
-        "400": { description: org_required — no X-Org-Id }
+        "400": { description: "org_required (no X-Org-Id), invalid_cursor, invalid_kind, invalid_role or too_many_ids" }
         "403": { description: Not a member of this org, or the permission the route asks for is missing (`permission` names it) }
         "404": { description: No customer with that external id }
     post:
@@ -250,6 +254,39 @@ paths:
       responses:
         "204": { description: Removed }
         "404": { description: link_not_found }
+
+  /changes:
+    get:
+      tags: [customers]
+      summary: What changed in this organization's directory
+      description: >-
+        The record events, oldest first, thinned to what a follower needs: it
+        says that a record changed, not what it is now (read those with
+        `GET /customers?ids=`). Keep `cursor` and pass it as `after`.
+      parameters:
+        - { name: after, in: query, schema: { type: string }, description: The cursor of an earlier answer. Omit for everything. }
+        - { name: limit, in: query, schema: { type: integer, default: 100, maximum: 500 } }
+        - { name: entity, in: query, schema: { type: string, enum: [customer, link], default: customer } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  changes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        seq: { type: integer }
+                        type: { type: string }
+                        id: { type: string, description: The record's id, or the link's. }
+                        actor: { type: string }
+                        at: { type: integer }
+                  cursor: { type: string }
+        "400": { description: invalid_cursor or invalid_entity }
 
 components:
   securitySchemes:
