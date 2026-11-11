@@ -59,6 +59,9 @@ paths:
         a page of the directory.
       parameters:
         - { name: external_id, in: query, schema: { type: string } }
+        - { name: kind, in: query, schema: { type: string, enum: [company, person] } }
+        - { name: role, in: query, schema: { type: string, enum: [customer, supplier, employee, partner] } }
+        - { name: tax_id, in: query, schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 500 } }
         - { name: offset, in: query, schema: { type: integer, default: 0 } }
       responses:
@@ -119,21 +122,32 @@ paths:
     patch:
       tags: [customers]
       summary: Change a customer
-      description: At least one field. Absent fields are left alone.
+      description: >-
+        At least one field. Absent fields are left alone. A field a person has
+        locked is skipped and named in `skippedFields`; the rest is applied.
+        `unlock` is applied before the write and `lock` after it. Only a person
+        locks or unlocks (a service token is answered 403 `person_only`).
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/CustomerInput" }
+            schema:
+              allOf:
+                - { $ref: "#/components/schemas/CustomerInput" }
+                - type: object
+                  properties:
+                    lock: { type: array, items: { $ref: "#/components/schemas/LockableField" } }
+                    unlock: { type: array, items: { $ref: "#/components/schemas/LockableField" } }
       responses:
         "200":
-          description: Changed
+          description: Changed, or left as it was when every named field is locked
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   customer: { $ref: "#/components/schemas/Customer" }
+                  skippedFields: { type: array, items: { $ref: "#/components/schemas/LockableField" } }
         "404": { description: No such customer in this org }
     delete:
       tags: [customers]
@@ -144,6 +158,98 @@ paths:
       responses:
         "204": { description: Archived }
         "404": { description: No such customer in this org }
+
+  /customers/{id}/restore:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string }, description: The id. An archived record has no other handle. }
+    post:
+      tags: [customers]
+      summary: Bring an archived customer back
+      responses:
+        "200":
+          description: Restored whole, under the same id and short id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  customer: { $ref: "#/components/schemas/Customer" }
+        "404": { description: No such record }
+        "409": { description: not_archived, or external_id_taken when another record now holds its external id }
+
+  /customers/{ref}/links:
+    parameters:
+      - { name: ref, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [customers]
+      summary: Who is at this company, or where this person is
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  links: { type: array, items: { $ref: "#/components/schemas/Link" } }
+    post:
+      tags: [customers]
+      summary: Link a person and a company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to]
+              properties:
+                to: { type: string, description: The other record, by id, short id or external id. }
+                title: { type: string, maxLength: 120 }
+      responses:
+        "201":
+          description: Linked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  link: { $ref: "#/components/schemas/Link" }
+        "404": { description: not_found, or link_target_not_found }
+        "409": { description: link_exists }
+        "422": { description: link_needs_person_and_company }
+
+  /customers/{ref}/links/{linkId}:
+    parameters:
+      - { name: ref, in: path, required: true, schema: { type: string }, description: Either side of the link. }
+      - { name: linkId, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [customers]
+      summary: Change a link's title
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, maxLength: 120 }
+      responses:
+        "200":
+          description: Changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  link: { $ref: "#/components/schemas/Link" }
+        "404": { description: link_not_found }
+    delete:
+      tags: [customers]
+      summary: Remove a link
+      responses:
+        "204": { description: Removed }
+        "404": { description: link_not_found }
 
 components:
   securitySchemes:
@@ -167,9 +273,16 @@ components:
       type: object
       properties:
         name: { type: string }
+        kind: { type: string, enum: [company, person], default: company }
+        roles:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [customer, supplier, employee, partner] }
+          description: Replaced whole. Default [customer].
+        website: { type: string }
         externalId:
           type: string
-          description: This customer's id in the caller's own system. Unique per org.
+          description: The id in the user's own third-party system. One per record, unique per org.
         email: { type: string, format: email }
         phone: { type: string }
         taxId: { type: string }
@@ -184,7 +297,11 @@ components:
         id: { type: string }
         shortId: { type: string }
         externalId: { type: [string, "null"] }
+        kind: { type: string, enum: [company, person] }
+        roles: { type: array, items: { type: string, enum: [customer, supplier, employee, partner] } }
         name: { type: string }
+        website: { type: [string, "null"] }
+        lockedFields: { type: array, items: { $ref: "#/components/schemas/LockableField" } }
         email: { type: [string, "null"] }
         phone: { type: [string, "null"] }
         taxId: { type: [string, "null"] }
@@ -196,6 +313,26 @@ components:
         metadata: { type: object, additionalProperties: true }
         createdAt: { type: integer }
         updatedAt: { type: integer }
+
+    LockableField:
+      type: string
+      enum: [name, email, phone, website, taxId, currency, address]
+
+    LinkParty:
+      type: object
+      properties:
+        id: { type: string }
+        shortId: { type: string }
+        name: { type: string }
+
+    Link:
+      type: object
+      properties:
+        id: { type: string }
+        person: { $ref: "#/components/schemas/LinkParty" }
+        company: { $ref: "#/components/schemas/LinkParty" }
+        title: { type: [string, "null"] }
+        createdAt: { type: integer }
 
     ServiceManifest:
       type: object

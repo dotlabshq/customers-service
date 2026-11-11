@@ -29,7 +29,52 @@ All routes require `Authorization: Bearer <identity-jwt>` + `X-Org-Id: <org>`.
 | `POST` | `/customers` | `customer.write` | create |
 | `PATCH` | `/customers/:ref` | `customer.write` | update |
 | `DELETE` | `/customers/:ref` | `customer.archive` | archive |
+| `POST` | `/customers/:id/restore` | `customer.archive` | bring an archived record back |
+| `GET` | `/customers/:ref/links` | `customer.read` | who is at this company, or where this person is |
+| `POST` | `/customers/:ref/links` | `customer.write` | link to another record: `{ to, title? }` |
+| `PATCH` · `DELETE` | `/customers/:ref/links/:linkId` | `customer.write` | change the title, remove the link |
 | `GET` | `/.well-known/service` · `/openapi.yaml` | none | as every service |
+
+`GET /customers` filters: `?kind=company|person`, `?role=<role>`, `?tax_id=`,
+and `?external_id=` (answers the one record, or 404).
+
+## The record
+
+The directory is generic: the same record serves billing, accounting and a
+CRM, so it says who a party is and nothing about what a product does with it.
+
+| Field | |
+|---|---|
+| `name` | required |
+| `kind` | `company` (default) or `person` |
+| `roles` | a set of `customer`, `supplier`, `employee`, `partner`; default `[customer]`. Replaced whole on update |
+| `email`, `phone`, `website`, `taxId`, `currency`, `address` | optional |
+| `externalId` | the id in the user's own third-party system. One per record, unique in the org. Anything more goes in `metadata` |
+| `metadata` | free JSON, merged on update; the product's own |
+| `lockedFields` | read only; see below |
+
+A consumer stores only the record's `id` and reads the profile here; it does
+not write its own ids into the record.
+
+**Locked fields.** A person can lock `name`, `email`, `phone`, `website`,
+`taxId`, `currency` or `address`: `PATCH { "lock": ["name"] }`. A later write
+that names a locked field leaves it as it is, applies the rest, and answers
+with `skippedFields`. `unlock` is applied before the write and `lock` after it,
+so "unlock and change" and "set and lock" are each one request. Only a person
+locks or unlocks; a service token is answered `403 person_only`.
+
+**Archive and restore.** Archiving removes the record from every read; its
+events stay. `POST /customers/:id/restore` writes it back whole, under the
+same id and short id, with its locks. By id only, and refused (`409`) while
+another record holds its `externalId`.
+
+**Links.** A link joins one person and one company, with an optional `title`
+(what the person is there). Each pair once; a person can be at several
+companies. Either side lists it. A link to an archived record is not shown
+and returns with the record.
+
+Records written before 0.4.0 carry none of the new fields and read as a
+company that is a customer, with nothing locked.
 
 ## Permissions
 
@@ -49,10 +94,6 @@ named; org-service not answering is `502`. **Until the registration succeeds a
 person is refused everything**, so in a realm on ES256 the service needs its
 own client at auth-service (see Env). A **service token** acts as itself and is
 not asked about; which services may do what is not narrowed yet.
-
-Fields: `name` (required), `email`, `phone`, `taxId`, `currency`, `externalId`,
-`address`, `metadata`. A consumer stores only `customer_id` and reads the profile
-here (ADR-008 pattern).
 
 ## The org is resolved, not taken at its word
 

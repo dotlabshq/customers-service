@@ -72,3 +72,26 @@ The projection is named `customers` → foldbase table `read_customers`. Tenant 
 
 - Service: `projects/customers-service` · plane overview:
   `docs/architecture/capability-services.md` · [ADR-010](../../../../docs/decisions/010-driptab-erp-decomposition.md).
+
+## 0.3.0
+
+For customers-service 0.4.0. A record has a `kind` (`company` or `person`),
+a set of `roles`, a `website` and `lockedFields`; `list()` filters by `kind`,
+`role` and `taxId`.
+
+```ts
+await customers.update(id, { name: 'Acme GmbH', lock: ['name'] })   // set and lock
+const { customer, skippedFields } = await customers.updateWithResult(id, { name: 'ACME', email: 'a@acme.test' })
+// skippedFields: ['name'], the email is applied
+
+await customers.delete(id)          // archive
+await customers.restore(id)         // and back, whole
+
+const link = await customers.link(companyId, personId, 'CFO')
+await customers.links(personId)     // either side lists it
+await customers.unlink(companyId, link.id)
+```
+
+`externalId` is the id in the user's own third-party system: one per record.
+The event catalog gains `CustomerRestored` and the `customer_link` aggregate
+(`LinkEvents`); the read model gains the `customer_links` projection.

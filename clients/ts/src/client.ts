@@ -1,4 +1,6 @@
-import type { Customer, CreateCustomerInput, UpdateCustomerInput } from './types.js'
+import type {
+  Customer, CreateCustomerInput, UpdateCustomerInput, UpdateResult, ListCustomersOptions, CustomerLink,
+} from './types.js'
 
 export type {
   Customer,
@@ -6,6 +8,14 @@ export type {
   Address,
   CreateCustomerInput,
   UpdateCustomerInput,
+  UpdateResult,
+  ListCustomersOptions,
+  CustomerKind,
+  CustomerRole,
+  LockableField,
+  CustomerLink,
+  LinkParty,
+  LinkRow,
 } from './types.js'
 
 export interface CustomersClientOptions {
@@ -105,10 +115,13 @@ export class CustomersClient {
 
   // ── customers ─────────────────────────────────────────────────────────────
 
-  async list(opts: { limit?: number; offset?: number } = {}): Promise<Customer[]> {
+  async list(opts: ListCustomersOptions = {}): Promise<Customer[]> {
     const q = new URLSearchParams()
     if (opts.limit !== undefined) q.set('limit', String(opts.limit))
     if (opts.offset !== undefined) q.set('offset', String(opts.offset))
+    if (opts.kind) q.set('kind', opts.kind)
+    if (opts.role) q.set('role', opts.role)
+    if (opts.taxId) q.set('tax_id', opts.taxId)
     const qs = q.toString()
     const { customers } = await this.api<{ customers: Customer[] }>('GET', `/customers${qs ? `?${qs}` : ''}`)
     return customers
@@ -126,11 +139,40 @@ export class CustomersClient {
     return customer
   }
   async update(ref: string, input: UpdateCustomerInput): Promise<Customer> {
-    const { customer } = await this.api<{ customer: Customer }>('PATCH', `/customers/${ref}`, input)
-    return customer
+    return (await this.updateWithResult(ref, input)).customer
   }
+  /** As `update`, and also says which locked fields the write left alone. */
+  async updateWithResult(ref: string, input: UpdateCustomerInput): Promise<UpdateResult> {
+    const r = await this.api<{ customer: Customer; skippedFields?: UpdateResult['skippedFields'] }>('PATCH', `/customers/${ref}`, input)
+    return { customer: r.customer, skippedFields: r.skippedFields ?? [] }
+  }
+  /** Archive. The record leaves every list; `restore` brings it back. */
   async delete(ref: string): Promise<void> {
     await this.api('DELETE', `/customers/${ref}`)
+  }
+  /** Bring an archived record back. By id only: an archived record has no other handle. */
+  async restore(id: string): Promise<Customer> {
+    const { customer } = await this.api<{ customer: Customer }>('POST', `/customers/${id}/restore`, {})
+    return customer
+  }
+
+  // ── links: which person is at which company ───────────────────────────────
+
+  async links(ref: string): Promise<CustomerLink[]> {
+    const { links } = await this.api<{ links: CustomerLink[] }>('GET', `/customers/${ref}/links`)
+    return links
+  }
+  /** Link `ref` to `to`. One of the two must be a person and the other a company. */
+  async link(ref: string, to: string, title?: string): Promise<CustomerLink> {
+    const { link } = await this.api<{ link: CustomerLink }>('POST', `/customers/${ref}/links`, { to, ...(title ? { title } : {}) })
+    return link
+  }
+  async retitleLink(ref: string, linkId: string, title: string): Promise<CustomerLink> {
+    const { link } = await this.api<{ link: CustomerLink }>('PATCH', `/customers/${ref}/links/${linkId}`, { title })
+    return link
+  }
+  async unlink(ref: string, linkId: string): Promise<void> {
+    await this.api('DELETE', `/customers/${ref}/links/${linkId}`)
   }
 }
 

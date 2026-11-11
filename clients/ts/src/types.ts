@@ -14,6 +14,20 @@ export interface CustomerRow {
   currency: string
   address: string // JSON string
   metadata: string // JSON string
+  /** NULL on rows written before 0.4.0. */
+  kind: string | null
+  roles: string | null
+  website: string | null
+  locked: string | null // JSON array string
+  created_at: number
+  updated_at: number
+}
+
+export interface LinkRow {
+  id: string
+  person_id: string
+  company_id: string
+  title: string
   created_at: number
   updated_at: number
 }
@@ -29,12 +43,23 @@ export interface Address {
   country?: string
 }
 
+export type CustomerKind = 'company' | 'person'
+/** What the party is to the organization. One record can be several. */
+export type CustomerRole = 'customer' | 'supplier' | 'employee' | 'partner'
+/** A field a person may lock, so later writes leave it as it is. */
+export type LockableField = 'name' | 'email' | 'phone' | 'website' | 'taxId' | 'currency' | 'address'
+
 export interface Customer {
   id: string
   shortId: string
-  /** Optional caller-side id (e.g. the id in the consumer's own system). */
+  /** The id in the user's own third-party system. One per record; anything more belongs in `metadata`. */
   externalId: string | null
+  kind: CustomerKind
+  roles: CustomerRole[]
   name: string
+  website: string | null
+  /** Fields a person has locked. A write that names one skips it. */
+  lockedFields: LockableField[]
   email: string | null
   phone: string | null
   taxId: string | null
@@ -47,6 +72,11 @@ export interface Customer {
 
 export interface CreateCustomerInput {
   name: string
+  /** Default `company`. */
+  kind?: CustomerKind
+  /** Default `['customer']`. */
+  roles?: CustomerRole[]
+  website?: string
   externalId?: string
   email?: string
   phone?: string
@@ -58,6 +88,13 @@ export interface CreateCustomerInput {
 
 export interface UpdateCustomerInput {
   name?: string
+  kind?: CustomerKind
+  roles?: CustomerRole[]
+  website?: string
+  /** Lock these fields (after this write's own values are applied). A person only. */
+  lock?: LockableField[]
+  /** Unlock these fields (before this write is applied). A person only. */
+  unlock?: LockableField[]
   externalId?: string
   email?: string
   phone?: string
@@ -65,4 +102,35 @@ export interface UpdateCustomerInput {
   currency?: string
   address?: Address
   metadata?: Record<string, unknown>
+}
+
+/** What an update did: the record, and the locked fields it left alone. */
+export interface UpdateResult {
+  customer: Customer
+  skippedFields: LockableField[]
+}
+
+export interface ListCustomersOptions {
+  limit?: number
+  offset?: number
+  kind?: CustomerKind
+  role?: CustomerRole
+  taxId?: string
+}
+
+/** One side of a link, enough to show it. */
+export interface LinkParty {
+  id: string
+  shortId: string
+  name: string
+}
+
+/** A person's place at a company. */
+export interface CustomerLink {
+  id: string
+  person: LinkParty
+  company: LinkParty
+  /** What the person is there (`CFO`, `Purchasing`); null if not said. */
+  title: string | null
+  createdAt: number
 }
